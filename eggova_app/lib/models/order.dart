@@ -1,0 +1,76 @@
+import 'user.dart';
+
+class OrderModel {
+  final String id;
+  final String orderNumber;
+  final String userId;
+  final int trayCount;
+  final double pricePerTray;
+  final double totalAmount;
+  final String paymentMethod;
+  final String paymentStatus;
+  final String orderStatus;
+  final String? razorpayOrderId;
+  final String? razorpayPaymentId;
+  final DateTime? paidAt;
+  final String? paidVia;
+  final DateTime createdAt;
+  final UserModel? user;
+
+  OrderModel({
+    required this.id,
+    required this.orderNumber,
+    required this.userId,
+    required this.trayCount,
+    required this.pricePerTray,
+    required this.totalAmount,
+    required this.paymentMethod,
+    required this.paymentStatus,
+    required this.orderStatus,
+    this.razorpayOrderId,
+    this.razorpayPaymentId,
+    this.paidAt,
+    this.paidVia,
+    required this.createdAt,
+    this.user,
+  });
+
+  bool get isPending => paymentStatus == 'pending' || paymentStatus == 'approval_pending';
+  bool get isCompleted => paymentStatus == 'completed';
+  bool get isApprovalPending => paymentStatus == 'approval_pending';
+
+  String get statusLabel {
+    switch (paymentStatus) {
+      case 'completed':
+        return 'Paid';
+      case 'approval_pending':
+        return 'Awaiting Approval';
+      case 'pending':
+        return 'Payment Pending';
+      default:
+        return paymentStatus;
+    }
+  }
+
+  factory OrderModel.fromJson(Map<String, dynamic> json) {
+    return OrderModel(
+      id: json['id'] ?? '',
+      orderNumber: json['orderNumber'] ?? json['order_number'] ?? '',
+      userId: json['userId'] ?? json['user_id'] ?? '',
+      trayCount: json['trayCount'] ?? json['tray_count'] ?? 0,
+      pricePerTray: (json['pricePerTray'] ?? json['price_per_tray'] ?? 0).toDouble(),
+      totalAmount: (json['totalAmount'] ?? json['total_amount'] ?? 0).toDouble(),
+      paymentMethod: json['paymentMethod'] ?? json['payment_method'] ?? '',
+      paymentStatus: json['paymentStatus'] ?? json['payment_status'] ?? 'pending',
+      orderStatus: json['orderStatus'] ?? json['order_status'] ?? 'placed',
+      razorpayOrderId: json['razorpayOrderId'] ?? json['razorpay_order_id'],
+      razorpayPaymentId: json['razorpayPaymentId'] ?? json['razorpay_payment_id'],
+      paidAt: json['paidAt'] != null
+          ? DateTime.parse(json['paidAt'])
+          : (json['paid_at'] != null ? DateTime.parse(json['paid_at']) : null),
+      paidVia: json['paidVia'] ?? json['paid_via'],
+      createdAt: DateTime.parse(json['createdAt'] ?? json['created_at'] ?? DateTime.now().toIso8601String()),
+      user: json['user'] != null ? UserModel.fromJson(json['user']) : null,
+    );
+  }
+}

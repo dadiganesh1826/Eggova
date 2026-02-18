@@ -1,0 +1,29 @@
+﻿flutter : Android 
+sdkmanager not 
+found. Update to the 
+latest Android SDK 
+and ensure that the 
+cmdline-tools are 
+installed to resolve 
+this.
+At line:1 char:81
++ ... " * 10); echo 
+$yeses | flutter 
+doctor 
+--android-licenses 
+2>&1 | Out-F ...
++                    
+        ~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~
+~~~~
+    + CategoryInfo   
+           : NotSpe  
+  cified: (Android   
+  sdkmana...o res    
+olve this.:Strin    
+g) [], RemoteExc    
+eption
+    + FullyQualified 
+   ErrorId : Native  
+  CommandError
+ 
