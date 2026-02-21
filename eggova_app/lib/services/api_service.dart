@@ -31,10 +31,19 @@ class ApiService {
     ));
   }
 
-  // Auth
-  Future<Response> register(Map<String, dynamic> data) =>
-      _dio.post('/auth/register', data: data);
+  // Auth — OTP flow
+  Future<Response> sendOtp(String phone) =>
+      _dio.post('/auth/send-otp', data: {'phone': phone});
 
+  Future<Response> verifyOtp(String phone, String otp, {String? name, String? district}) =>
+      _dio.post('/auth/verify-otp', data: {
+        'phone': phone,
+        'otp': otp,
+        if (name != null) 'name': name,
+        if (district != null) 'district': district,
+      });
+
+  // Auth — Legacy (admin email login)
   Future<Response> login(String email, String password) =>
       _dio.post('/auth/login', data: {'email': email, 'password': password});
 
@@ -52,6 +61,13 @@ class ApiService {
 
   Future<Response> getPriceHistory({String? district}) =>
       _dio.get('/egg-prices/history', queryParameters: district != null ? {'district': district} : null);
+
+  Future<Response> getTodayAllPrices() => _dio.get('/egg-prices/today-all');
+
+  Future<Response> setDailyStock(int totalTrays) =>
+      _dio.post('/egg-prices/set-stock', data: {'totalTrays': totalTrays});
+
+  Future<Response> getStockToday() => _dio.get('/egg-prices/stock-today');
 
   // Orders
   Future<Response> placeOrder(int trayCount, String paymentMethod) =>

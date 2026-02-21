@@ -6,13 +6,18 @@ import '../services/api_service.dart';
 class OrderProvider extends ChangeNotifier {
   List<OrderModel> _orders = [];
   EggPrice? _currentPrice;
+  Map<String, dynamic> _todayStock = {};
   bool _isLoading = false;
   String? _error;
 
   List<OrderModel> get orders => _orders;
   EggPrice? get currentPrice => _currentPrice;
+  Map<String, dynamic> get todayStock => _todayStock;
   bool get isLoading => _isLoading;
   String? get error => _error;
+
+  int get availableTrays => (_todayStock['remainingTrays'] ?? 0) as int;
+  bool get isStockSet => (_todayStock['isSet'] ?? false) as bool;
 
   final ApiService _api = ApiService();
 
@@ -37,6 +42,17 @@ class OrderProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // Fetch today's stock
+  Future<void> fetchTodayStock() async {
+    try {
+      final response = await _api.getStockToday();
+      if (response.data['success']) {
+        _todayStock = Map<String, dynamic>.from(response.data['data']);
+        notifyListeners();
+      }
+    } catch (_) {}
+  }
+
   // Place order
   Future<OrderModel?> placeOrder(int trayCount, String paymentMethod) async {
     _isLoading = true;
@@ -48,6 +64,7 @@ class OrderProvider extends ChangeNotifier {
       if (response.data['success']) {
         final order = OrderModel.fromJson(response.data['data']);
         _orders.insert(0, order);
+        await fetchTodayStock(); // Refresh stock after order
         _isLoading = false;
         notifyListeners();
         return order;

@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../config/theme.dart';
+import '../../config/district_data.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/admin_provider.dart';
 
@@ -19,6 +20,13 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
   final _currencyFormat = NumberFormat.currency(locale: 'en_IN', symbol: '₹');
   late TabController _paymentTabController;
 
+  // Settings tab state
+  String? _selectedDistrict;
+  final _priceController = TextEditingController();
+  final _stockController = TextEditingController();
+  bool _isSettingPrice = false;
+  bool _isSettingStock = false;
+
   @override
   void initState() {
     super.initState();
@@ -29,12 +37,17 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
       admin.fetchUsers();
       admin.fetchPendingPayments();
       admin.fetchCompletedPayments();
+      admin.fetchTodayPrices();
+      admin.fetchTodayStock();
     });
   }
 
   @override
+  @override
   void dispose() {
     _paymentTabController.dispose();
+    _priceController.dispose();
+    _stockController.dispose();
     super.dispose();
   }
 
@@ -649,8 +662,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
   // ─── SETTINGS TAB ─────────────────────────────────────
   Widget _buildSettingsTab() {
     final auth = Provider.of<AuthProvider>(context);
-    final _priceController = TextEditingController();
-    final _districtController = TextEditingController();
+    final admin = Provider.of<AdminProvider>(context);
 
     return Scaffold(
       backgroundColor: AppColors.offWhite,
@@ -664,7 +676,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Set egg price section
+            // ── Set egg price section ──
             Text('Set Egg Price', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.darkGray)),
             const SizedBox(height: 6),
             Text('Set today\'s egg price for a district', style: GoogleFonts.outfit(fontSize: 13, color: AppColors.gray)),
@@ -679,36 +691,75 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
               ),
               child: Column(
                 children: [
-                  TextField(
-                    controller: _districtController,
-                    style: GoogleFonts.outfit(fontSize: 15),
+                  // District Dropdown
+                  DropdownButtonFormField<String>(
+                    value: _selectedDistrict,
+                    isExpanded: true,
+                    icon: const Icon(Icons.keyboard_arrow_down, color: AppColors.primary),
+                    style: GoogleFonts.outfit(color: AppColors.darkGray, fontSize: 15),
                     decoration: InputDecoration(
-                      labelText: 'District',
+                      labelText: 'Select District',
                       prefixIcon: const Icon(Icons.location_on_outlined, color: AppColors.primary),
                       labelStyle: GoogleFonts.outfit(color: AppColors.gray),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: AppColors.lightGray.withOpacity(0.3)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                     ),
+                    items: DistrictData.dropdownItems.map((item) {
+                      return DropdownMenuItem<String>(
+                        value: item['district'],
+                        child: Text(item['label']!, style: GoogleFonts.outfit(fontSize: 15)),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      setState(() => _selectedDistrict = value);
+                    },
                   ),
                   const SizedBox(height: 16),
+
+                  // Price input
                   TextField(
                     controller: _priceController,
-                    keyboardType: TextInputType.number,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     style: GoogleFonts.outfit(fontSize: 15),
                     decoration: InputDecoration(
                       labelText: 'Price per Egg (₹)',
                       prefixIcon: const Icon(Icons.currency_rupee, color: AppColors.primary),
                       labelStyle: GoogleFonts.outfit(color: AppColors.gray),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(color: AppColors.lightGray.withOpacity(0.3)),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                     ),
                   ),
                   const SizedBox(height: 20),
+
+                  // Set Price button
                   SizedBox(
                     width: double.infinity,
                     height: 52,
                     child: ElevatedButton.icon(
-                      onPressed: () async {
-                        final district = _districtController.text.trim();
+                      onPressed: _isSettingPrice ? null : () async {
+                        if (_selectedDistrict == null) {
+                          _showSnack('Please select a district');
+                          return;
+                        }
                         final priceStr = _priceController.text.trim();
-                        if (district.isEmpty || priceStr.isEmpty) {
-                          _showSnack('Please fill all fields');
+                        if (priceStr.isEmpty) {
+                          _showSnack('Please enter a price');
                           return;
                         }
                         final price = double.tryParse(priceStr);
@@ -716,20 +767,156 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
                           _showSnack('Enter a valid price');
                           return;
                         }
-                        final admin = Provider.of<AdminProvider>(context, listen: false);
-                        await admin.setEggPrice(district, price);
-                        _priceController.clear();
-                        _districtController.clear();
-                        _showSnack('Price set successfully! ✅');
+                        setState(() => _isSettingPrice = true);
+                        final success = await admin.setEggPrice(_selectedDistrict!, price);
+                        setState(() => _isSettingPrice = false);
+                        if (success) {
+                          _priceController.clear();
+                          setState(() => _selectedDistrict = null);
+                          _showSnack('Price set successfully! ✅');
+                        } else {
+                          _showSnack('Failed to set price');
+                        }
                       },
-                      icon: const Icon(Icons.save, size: 20),
-                      label: Text('Set Price', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w600)),
+                      icon: _isSettingPrice
+                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.black))
+                          : const Icon(Icons.save, size: 20),
+                      label: Text(
+                        _isSettingPrice ? 'Setting...' : 'Set Price',
+                        style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w600),
+                      ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
                         foregroundColor: AppColors.black,
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                       ),
                     ),
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 28),
+
+            // ── Today's Prices Overview ──
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text("Today's Prices", style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.darkGray)),
+                IconButton(
+                  onPressed: () => admin.fetchTodayPrices(),
+                  icon: const Icon(Icons.refresh, color: AppColors.primary, size: 22),
+                  tooltip: 'Refresh',
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text('Egg prices across all districts', style: GoogleFonts.outfit(fontSize: 13, color: AppColors.gray)),
+            const SizedBox(height: 16),
+
+            if (admin.todayPrices.isEmpty)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: AppColors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [BoxShadow(color: AppColors.black.withOpacity(0.04), blurRadius: 12)],
+                ),
+                child: Column(
+                  children: [
+                    const Icon(Icons.egg_outlined, size: 40, color: AppColors.lightGray),
+                    const SizedBox(height: 8),
+                    Text('No prices set yet', style: GoogleFonts.outfit(color: AppColors.gray, fontSize: 14)),
+                  ],
+                ),
+              )
+            else
+              ...admin.todayPrices.map((p) => _buildPriceCard(p)),
+
+            const SizedBox(height: 28),
+
+            // ── Stock Management ──
+            Text('Stock Management', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.darkGray)),
+            const SizedBox(height: 6),
+            Text('Set daily tray availability', style: GoogleFonts.outfit(fontSize: 13, color: AppColors.gray)),
+            const SizedBox(height: 16),
+
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: AppColors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [BoxShadow(color: AppColors.black.withOpacity(0.04), blurRadius: 12)],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Current stock status
+                  if (admin.todayStock.isNotEmpty && admin.todayStock['isSet'] == true) ...[
+                    _buildStockIndicator(admin.todayStock),
+                    const SizedBox(height: 20),
+                    const Divider(height: 1),
+                    const SizedBox(height: 20),
+                  ],
+
+                  // Set/Update stock input
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _stockController,
+                          keyboardType: TextInputType.number,
+                          style: GoogleFonts.outfit(fontSize: 15),
+                          decoration: InputDecoration(
+                            labelText: admin.todayStock['isSet'] == true ? 'Update Tray Limit' : 'Total Trays Available',
+                            prefixIcon: const Icon(Icons.inventory_2_outlined, color: AppColors.primary),
+                            labelStyle: GoogleFonts.outfit(color: AppColors.gray),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: AppColors.lightGray.withOpacity(0.3)),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      SizedBox(
+                        height: 52,
+                        child: ElevatedButton(
+                          onPressed: _isSettingStock ? null : () async {
+                            final val = int.tryParse(_stockController.text.trim());
+                            if (val == null || val <= 0) {
+                              _showSnack('Enter a valid tray count');
+                              return;
+                            }
+                            setState(() => _isSettingStock = true);
+                            final ok = await admin.setDailyStock(val);
+                            setState(() => _isSettingStock = false);
+                            if (ok) {
+                              _stockController.clear();
+                              _showSnack(admin.successMessage ?? 'Stock limit updated! \u2705');
+                            } else {
+                              _showSnack(admin.error ?? 'Failed to set stock');
+                            }
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: AppColors.black,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                          ),
+                          child: _isSettingStock
+                              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.black))
+                              : Text(admin.todayStock['isSet'] == true ? 'Update' : 'Set', style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -758,6 +945,169 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildPriceCard(Map<String, dynamic> priceData) {
+    final district = priceData['district'] as String;
+    final pricePerEgg = priceData['pricePerEgg'];
+    final isSet = pricePerEgg != null;
+    final state = DistrictData.getState(district);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: isSet ? AppColors.primary.withOpacity(0.15) : Colors.amber.withOpacity(0.3)),
+        boxShadow: [BoxShadow(color: AppColors.black.withOpacity(0.03), blurRadius: 8)],
+      ),
+      child: Row(
+        children: [
+          // District icon
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: isSet ? AppColors.primary.withOpacity(0.1) : Colors.amber.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              isSet ? Icons.egg : Icons.egg_outlined,
+              color: isSet ? AppColors.primary : Colors.amber,
+              size: 22,
+            ),
+          ),
+          const SizedBox(width: 14),
+
+          // District name + state
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(district, style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.darkGray)),
+                Text(state, style: GoogleFonts.outfit(fontSize: 12, color: AppColors.gray)),
+              ],
+            ),
+          ),
+
+          // Price
+          if (isSet)
+            Text(
+              '₹${pricePerEgg.toStringAsFixed(2)}',
+              style: GoogleFonts.outfit(fontSize: 17, fontWeight: FontWeight.w700, color: AppColors.primary),
+            )
+          else
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.amber.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text('Not set', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.amber.shade800)),
+            ),
+
+          const SizedBox(width: 8),
+
+          // Edit button
+          GestureDetector(
+            onTap: () {
+              setState(() {
+                _selectedDistrict = district;
+                if (isSet) {
+                  _priceController.text = pricePerEgg.toString();
+                } else {
+                  _priceController.clear();
+                }
+              });
+              // Scroll to top
+              _showSnack('Editing price for $district');
+            },
+            child: Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: AppColors.offWhite,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.edit, size: 16, color: AppColors.gray),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStockIndicator(Map<String, dynamic> stock) {
+    final total = (stock['totalTrays'] ?? 0) as int;
+    final sold = (stock['soldTrays'] ?? 0) as int;
+    final remaining = (stock['remainingTrays'] ?? 0) as int;
+    final progress = total > 0 ? sold / total : 0.0;
+
+    Color barColor;
+    String statusText;
+    if (remaining == 0) {
+      barColor = AppColors.error;
+      statusText = 'OUT OF STOCK';
+    } else if (remaining <= 50) {
+      barColor = Colors.amber;
+      statusText = 'LOW STOCK';
+    } else {
+      barColor = AppColors.success;
+      statusText = 'IN STOCK';
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('Today\'s Stock', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.darkGray)),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+              decoration: BoxDecoration(
+                color: barColor.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(statusText, style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w700, color: barColor)),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+
+        // Progress bar
+        ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: LinearProgressIndicator(
+            value: progress,
+            minHeight: 10,
+            backgroundColor: AppColors.offWhite,
+            valueColor: AlwaysStoppedAnimation<Color>(barColor),
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // Stats row
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            _buildStockStat('Total', total, AppColors.darkGray),
+            _buildStockStat('Sold', sold, barColor),
+            _buildStockStat('Remaining', remaining, AppColors.success),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStockStat(String label, int value, Color color) {
+    return Column(
+      children: [
+        Text('$value', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w800, color: color)),
+        Text(label, style: GoogleFonts.outfit(fontSize: 12, color: AppColors.gray)),
+      ],
     );
   }
 

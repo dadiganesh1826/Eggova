@@ -18,14 +18,77 @@ class _UserDashboardState extends State<UserDashboard> {
   int _trayCount = 1;
   int _currentIndex = 0;
   final _currencyFormat = NumberFormat.currency(locale: 'en_IN', symbol: '₹');
+  final _trayController = TextEditingController(text: '1');
 
   @override
   void initState() {
     super.initState();
+    _trayController.addListener(_onTrayTextChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<OrderProvider>(context, listen: false).fetchCurrentPrice();
-      Provider.of<OrderProvider>(context, listen: false).fetchOrders();
+      final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+      orderProvider.fetchCurrentPrice();
+      orderProvider.fetchOrders();
+      orderProvider.fetchTodayStock();
     });
+  }
+
+  @override
+  void dispose() {
+    _trayController.dispose();
+    super.dispose();
+  }
+
+  void _onTrayTextChanged() {
+    final val = int.tryParse(_trayController.text);
+    if (val != null && val != _trayCount) {
+      final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+      final maxAvailable = orderProvider.isStockSet ? orderProvider.availableTrays : 1000;
+      
+      if (val > maxAvailable) {
+        setState(() {
+          _trayCount = maxAvailable;
+          _trayController.text = maxAvailable.toString();
+          _trayController.selection = TextSelection.fromPosition(TextPosition(offset: _trayController.text.length));
+        });
+        _showSnack('Only $maxAvailable trays available today');
+      } else if (val < 1) {
+        // Don't force change while typing, but handle on blur if needed
+        // For now, just allow typing but maybe cap on order
+      } else {
+        setState(() {
+          _trayCount = val;
+        });
+      }
+    }
+  }
+
+  void _updateTrayCount(int newCount) {
+    if (newCount < 1) return;
+    
+    final orderProvider = Provider.of<OrderProvider>(context, listen: false);
+    final maxAvailable = orderProvider.isStockSet ? orderProvider.availableTrays : 1000;
+    
+    if (newCount > maxAvailable) {
+      _showSnack('Maximum $maxAvailable trays available');
+      newCount = maxAvailable;
+    }
+
+    setState(() {
+      _trayCount = newCount;
+      _trayController.text = newCount.toString();
+      _trayController.selection = TextSelection.fromPosition(TextPosition(offset: _trayController.text.length));
+    });
+  }
+
+  void _showSnack(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
+        backgroundColor: Colors.amber.shade700,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
   }
 
   @override
@@ -136,16 +199,90 @@ class _UserDashboardState extends State<UserDashboard> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Live price card
-                _buildPriceCard().animate().fadeIn(duration: 500.ms).slideY(begin: 0.1, end: 0),
+              _buildPriceCard().animate().fadeIn(duration: 500.ms).slideY(begin: 0.1, end: 0),
 
-                const SizedBox(height: 24),
+              const SizedBox(height: 14),
 
-                // Tray selector
-                Text('Select Egg Trays', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.darkGray)),
-                const SizedBox(height: 4),
-                Text('Each tray contains 30 eggs', style: GoogleFonts.outfit(fontSize: 13, color: AppColors.gray)),
-                const SizedBox(height: 16),
-                _buildTraySelector().animate().fadeIn(delay: 200.ms, duration: 500.ms),
+              // Stock availability badge
+              Consumer<OrderProvider>(
+                builder: (context, provider, _) {
+                  if (!provider.isStockSet) {
+                    return Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: Colors.amber.withOpacity(0.3)),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.info_outline, color: Colors.amber.shade700, size: 20),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Stock not set for today. Orders may be unavailable.',
+                              style: GoogleFonts.outfit(fontSize: 13, color: Colors.amber.shade800),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ).animate().fadeIn(delay: 100.ms, duration: 400.ms);
+                  }
+                  final avail = provider.availableTrays;
+                  final isOut = avail <= 0;
+                  return Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: isOut
+                          ? AppColors.error.withOpacity(0.08)
+                          : avail <= 50
+                              ? Colors.amber.withOpacity(0.1)
+                              : AppColors.success.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: isOut
+                            ? AppColors.error.withOpacity(0.3)
+                            : avail <= 50
+                                ? Colors.amber.withOpacity(0.3)
+                                : AppColors.success.withOpacity(0.2),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          isOut ? Icons.error_outline : Icons.inventory_2_outlined,
+                          color: isOut ? AppColors.error : avail <= 50 ? Colors.amber.shade700 : AppColors.success,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            isOut
+                                ? 'All stock for today has been sold out!'
+                                : '$avail tray${avail == 1 ? '' : 's'} available today',
+                            style: GoogleFonts.outfit(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: isOut ? AppColors.error : avail <= 50 ? Colors.amber.shade800 : AppColors.success,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ).animate().fadeIn(delay: 100.ms, duration: 400.ms);
+                },
+              ),
+
+              const SizedBox(height: 24),
+
+              // Tray selector
+              Text('Select Egg Trays', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.darkGray)),
+              const SizedBox(height: 4),
+              Text('Each tray contains 30 eggs', style: GoogleFonts.outfit(fontSize: 13, color: AppColors.gray)),
+              const SizedBox(height: 16),
+              _buildTraySelector().animate().fadeIn(delay: 200.ms, duration: 500.ms),
 
                 const SizedBox(height: 24),
 
@@ -259,19 +396,30 @@ class _UserDashboardState extends State<UserDashboard> {
             child: Row(
               children: [
                 _buildCounterButton(Icons.remove, () {
-                  if (_trayCount > 1) setState(() => _trayCount--);
+                  _updateTrayCount(_trayCount - 1);
                 }),
                 Container(
-                  width: 56,
+                  width: 70,
                   alignment: Alignment.center,
-                  child: Text(
-                    '$_trayCount',
-                    style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.darkGray),
+                  child: TextField(
+                    controller: _trayController,
+                    keyboardType: TextInputType.number,
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.darkGray),
+                    decoration: const InputDecoration(
+                      border: InputBorder.none,
+                      isDense: true,
+                      contentPadding: EdgeInsets.zero,
+                    ),
                   ),
                 ),
-                _buildCounterButton(Icons.add, () {
-                  if (_trayCount < 100) setState(() => _trayCount++);
-                }),
+                Consumer<OrderProvider>(
+                  builder: (context, provider, _) {
+                    return _buildCounterButton(Icons.add, () {
+                      _updateTrayCount(_trayCount + 1);
+                    });
+                  },
+                ),
               ],
             ),
           ),
@@ -356,15 +504,20 @@ class _UserDashboardState extends State<UserDashboard> {
               width: double.infinity,
               height: 56,
               child: ElevatedButton.icon(
-                onPressed: provider.isLoading || provider.currentPrice == null
+                onPressed: provider.isLoading ||
+                        provider.currentPrice == null ||
+                        (provider.isStockSet && provider.availableTrays <= 0)
                     ? null
                     : () => _placeOrder('upi'),
                 icon: const Icon(Icons.payment, size: 22),
-                label: Text('Pay with UPI', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w700)),
+                label: Text('Pay with UPI',
+                    style: GoogleFonts.outfit(
+                        fontSize: 16, fontWeight: FontWeight.w700)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: AppColors.black,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16)),
                   elevation: 0,
                 ),
               ),
@@ -375,15 +528,20 @@ class _UserDashboardState extends State<UserDashboard> {
               width: double.infinity,
               height: 56,
               child: OutlinedButton.icon(
-                onPressed: provider.isLoading || provider.currentPrice == null
+                onPressed: provider.isLoading ||
+                        provider.currentPrice == null ||
+                        (provider.isStockSet && provider.availableTrays <= 0)
                     ? null
                     : () => _placeOrder('pay_later'),
                 icon: const Icon(Icons.schedule, size: 22),
-                label: Text('Pay Later', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w700)),
+                label: Text('Pay Later',
+                    style: GoogleFonts.outfit(
+                        fontSize: 16, fontWeight: FontWeight.w700)),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.darkGray,
                   side: const BorderSide(color: AppColors.primary, width: 2),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16)),
                 ),
               ),
             ),
@@ -657,8 +815,30 @@ class _UserDashboardState extends State<UserDashboard> {
             const SizedBox(height: 28),
 
             _profileInfoCard(user),
+ 
+            const SizedBox(height: 20),
 
-            const SizedBox(height: 24),
+            // Edit Profile
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: ElevatedButton.icon(
+                onPressed: () async {
+                  await Navigator.pushNamed(context, '/edit-profile');
+                  if (mounted) setState(() {});
+                },
+                icon: const Icon(Icons.edit_outlined, size: 20),
+                label: Text('Edit Profile', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w600)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: AppColors.black,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  elevation: 0,
+                ),
+              ),
+            ),
+
+            const SizedBox(height: 16),
 
             // Logout
             SizedBox(

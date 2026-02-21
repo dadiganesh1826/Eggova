@@ -54,31 +54,72 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> register({
-    required String name,
-    required String email,
-    required String phone,
-    required String password,
-    required String district,
-    String? address,
-    String? state,
-    String? pincode,
-  }) async {
+  // Send OTP to phone number
+  Future<Map<String, dynamic>?> sendOtp(String phone) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      final response = await _api.register({
-        'name': name,
-        'email': email,
-        'phone': phone,
-        'password': password,
-        'district': district,
-        'address': address,
-        'state': state ?? 'Andhra Pradesh',
-        'pincode': pincode,
-      });
+      final response = await _api.sendOtp(phone);
+      if (response.data['success']) {
+        _isLoading = false;
+        notifyListeners();
+        return response.data['data'];
+      } else {
+        _error = response.data['message'];
+      }
+    } catch (e) {
+      _error = _extractError(e);
+    }
+
+    _isLoading = false;
+    notifyListeners();
+    return null;
+  }
+
+  // Verify OTP (login or first step of registration)
+  Future<Map<String, dynamic>?> verifyOtp(String phone, String otp,
+      {String? name, String? district}) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final response = await _api.verifyOtp(phone, otp, name: name, district: district);
+
+      if (response.data['success']) {
+        final data = response.data['data'];
+
+        if (data['token'] != null) {
+          _token = data['token'];
+          _user = UserModel.fromJson(data['user']);
+          await _saveToStorage();
+        }
+
+        _isLoading = false;
+        notifyListeners();
+        return data;
+      } else {
+        _error = response.data['message'];
+      }
+    } catch (e) {
+      _error = _extractError(e);
+    }
+
+    _isLoading = false;
+    notifyListeners();
+    return null;
+  }
+
+  // Legacy email login (for admin)
+  Future<bool> login(String email, String password) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final response = await _api.login(email, password);
 
       if (response.data['success']) {
         _token = response.data['data']['token'];
@@ -99,16 +140,29 @@ class AuthProvider extends ChangeNotifier {
     return false;
   }
 
-  Future<bool> login(String email, String password) async {
+  // Update profile
+  Future<bool> updateProfile({
+    String? name,
+    String? email,
+    String? district,
+    String? address,
+    String? pincode,
+  }) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      final response = await _api.login(email, password);
+      final data = <String, dynamic>{};
+      if (name != null) data['name'] = name;
+      if (email != null) data['email'] = email;
+      if (district != null) data['district'] = district;
+      if (address != null) data['address'] = address;
+      if (pincode != null) data['pincode'] = pincode;
+
+      final response = await _api.updateProfile(data);
 
       if (response.data['success']) {
-        _token = response.data['data']['token'];
         _user = UserModel.fromJson(response.data['data']['user']);
         await _saveToStorage();
         _isLoading = false;

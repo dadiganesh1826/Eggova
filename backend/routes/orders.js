@@ -1,5 +1,5 @@
 const express = require('express');
-const { Order, User, EggPrice } = require('../models');
+const { Order, User, EggPrice, DailyStock, Notification } = require('../models');
 const auth = require('../middleware/auth');
 
 const router = express.Router();
@@ -24,8 +24,30 @@ router.post('/place', auth, async (req, res) => {
             return res.status(400).json({ success: false, message: 'Invalid payment method' });
         }
 
-        // Get current price
+        // ── Stock check ──
         const today = new Date().toISOString().split('T')[0];
+        const stock = await DailyStock.findOne({ where: { date: today } });
+
+        if (!stock || stock.totalTrays === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'No stock available for today. Please check back later.',
+                availableTrays: 0,
+            });
+        }
+
+        const remaining = stock.totalTrays - stock.soldTrays;
+        if (trayCount > remaining) {
+            return res.status(400).json({
+                success: false,
+                message: remaining > 0
+                    ? `Only ${remaining} tray(s) available today. Please reduce your order.`
+                    : 'All stock for today has been sold out!',
+                availableTrays: remaining,
+            });
+        }
+
+        // Get current price
         let price = await EggPrice.findOne({
             where: { district: req.user.district, priceDate: today },
         });
@@ -57,6 +79,43 @@ router.post('/place', auth, async (req, res) => {
             paymentStatus: paymentMethod === 'pay_later' ? 'pending' : 'pending',
             orderStatus: 'placed',
         });
+
+        // ── Update sold count ──
+        await stock.increment('soldTrays', { by: trayCount });
+        await stock.reload();
+
+        const newRemaining = stock.totalTrays - stock.soldTrays;
+
+        // ── Admin notifications ──
+        const adminUsers = await User.findAll({ where: { role: 'admin' } });
+
+        if (newRemaining <= 50 && newRemaining > 0 && !stock.lowStockNotified) {
+            // Low stock warning
+            for (const admin of adminUsers) {
+                await Notification.create({
+                    userId: admin.id,
+                    title: '⚠️ Low Stock Alert',
+                    message: `Only ${newRemaining} tray(s) left today! Consider increasing the daily stock limit.`,
+                    type: 'stock_alert',
+                    metadata: { remainingTrays: newRemaining, date: today },
+                });
+            }
+            await stock.update({ lowStockNotified: true });
+        }
+
+        if (newRemaining === 0 && !stock.outOfStockNotified) {
+            // Out of stock
+            for (const admin of adminUsers) {
+                await Notification.create({
+                    userId: admin.id,
+                    title: '🚨 Stock Depleted!',
+                    message: `All ${stock.totalTrays} trays for today have been sold! Increase the stock limit to accept more orders.`,
+                    type: 'stock_alert',
+                    metadata: { totalSold: stock.soldTrays, date: today },
+                });
+            }
+            await stock.update({ outOfStockNotified: true });
+        }
 
         res.status(201).json({
             success: true,

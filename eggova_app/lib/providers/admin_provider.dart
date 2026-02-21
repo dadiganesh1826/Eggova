@@ -2,12 +2,15 @@ import 'package:flutter/material.dart';
 import '../models/user.dart';
 import '../models/order.dart';
 import '../services/api_service.dart';
+import 'package:dio/dio.dart';
 
 class AdminProvider extends ChangeNotifier {
   List<UserModel> _users = [];
   List<OrderModel> _pendingPayments = [];
   List<OrderModel> _completedPayments = [];
   Map<String, dynamic> _dashboardStats = {};
+  List<Map<String, dynamic>> _todayPrices = [];
+  Map<String, dynamic> _todayStock = {};
   bool _isLoading = false;
   String? _error;
 
@@ -15,6 +18,8 @@ class AdminProvider extends ChangeNotifier {
   List<OrderModel> get pendingPayments => _pendingPayments;
   List<OrderModel> get completedPayments => _completedPayments;
   Map<String, dynamic> get dashboardStats => _dashboardStats;
+  List<Map<String, dynamic>> get todayPrices => _todayPrices;
+  Map<String, dynamic> get todayStock => _todayStock;
   bool get isLoading => _isLoading;
   String? get error => _error;
 
@@ -113,18 +118,74 @@ class AdminProvider extends ChangeNotifier {
     return false;
   }
 
-  Future<void> setEggPrice(String district, double pricePerEgg) async {
+  Future<void> fetchTodayPrices() async {
     try {
-      await _api.setEggPrice({
+      final response = await _api.getTodayAllPrices();
+      if (response.data['success']) {
+        _todayPrices = (response.data['data'] as List)
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+        notifyListeners();
+      }
+    } catch (_) {}
+  }
+
+  Future<bool> setEggPrice(String district, double pricePerEgg) async {
+    try {
+      final response = await _api.setEggPrice({
         'district': district,
         'pricePerEgg': pricePerEgg,
         'pricePerTray': pricePerEgg * 30,
       });
+      if (response.data['success']) {
+        await fetchTodayPrices();
+        return true;
+      }
     } catch (_) {}
+    return false;
   }
 
   void clearError() {
     _error = null;
     notifyListeners();
+  }
+
+  Future<void> fetchTodayStock() async {
+    try {
+      final response = await _api.getStockToday();
+      if (response.data['success']) {
+        _todayStock = Map<String, dynamic>.from(response.data['data']);
+        notifyListeners();
+      }
+    } catch (_) {}
+  }
+
+  String? _successMessage;
+  String? get successMessage => _successMessage;
+
+  Future<bool> setDailyStock(int totalTrays) async {
+    _error = null;
+    _successMessage = null;
+    try {
+      final response = await _api.setDailyStock(totalTrays);
+      if (response.data['success']) {
+        _todayStock = Map<String, dynamic>.from(response.data['data']);
+        _successMessage = response.data['message'];
+        notifyListeners();
+        return true;
+      } else {
+        _error = response.data['message'];
+      }
+    } on DioException catch (e) {
+      if (e.response != null && e.response!.data is Map) {
+        _error = e.response!.data['message'] ?? 'Failed to set stock';
+      } else {
+        _error = 'Network error while setting stock';
+      }
+    } catch (e) {
+      _error = 'Failed to set stock';
+    }
+    notifyListeners();
+    return false;
   }
 }

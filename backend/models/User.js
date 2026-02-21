@@ -14,7 +14,7 @@ const User = sequelize.define('User', {
     },
     email: {
         type: DataTypes.STRING,
-        allowNull: false,
+        allowNull: true,
         unique: true,
         validate: { isEmail: true },
     },
@@ -25,7 +25,7 @@ const User = sequelize.define('User', {
     },
     passwordHash: {
         type: DataTypes.STRING,
-        allowNull: false,
+        allowNull: true,
         field: 'password_hash',
     },
     address: {

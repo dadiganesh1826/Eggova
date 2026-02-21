@@ -1,7 +1,7 @@
 class AppConstants {
   // API Base URL - change this to your deployed server
   // static const String apiBaseUrl = 'http://10.0.2.2:3000/api'; // Android emulator
-  static const String apiBaseUrl = 'http://192.168.0.107:3000/api'; // Physical device (LAN IP)
+  static const String apiBaseUrl = 'http://192.168.0.122:3000/api'; // Physical device (LAN IP)
 
   // App Info
   static const String appName = 'Eggova';

@@ -3,6 +3,7 @@ const User = require('./User');
 const EggPrice = require('./EggPrice');
 const Order = require('./Order');
 const Notification = require('./Notification');
+const DailyStock = require('./DailyStock');
 
 // Associations
 User.hasMany(Order, { foreignKey: 'user_id', as: 'orders' });
@@ -20,4 +21,5 @@ module.exports = {
     EggPrice,
     Order,
     Notification,
+    DailyStock,
 };
