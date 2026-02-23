@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const { sequelize } = require('./models');
+const { initScheduler } = require('./services/scheduler');
 
 const authRoutes = require('./routes/auth');
 const eggPriceRoutes = require('./routes/eggPrices');
@@ -46,6 +47,10 @@ async function start() {
     console.log('✅ Database connected');
     await sequelize.sync();
     console.log('✅ Models synchronized');
+
+    // Initialize Daily Egg Rate Scheduler (Runs at 6 AM IST)
+    initScheduler();
+
     app.listen(PORT, () => {
       console.log(`🚀 Eggova API running on port ${PORT}`);
     });

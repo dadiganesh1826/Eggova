@@ -64,6 +64,8 @@ class ApiService {
 
   Future<Response> getTodayAllPrices() => _dio.get('/egg-prices/today-all');
 
+  Future<Response> autoFetchPrices() => _dio.post('/egg-prices/auto-fetch');
+
   Future<Response> setDailyStock(int totalTrays) =>
       _dio.post('/egg-prices/set-stock', data: {'totalTrays': totalTrays});
 

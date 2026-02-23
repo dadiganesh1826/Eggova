@@ -3,6 +3,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import 'package:fl_chart/fl_chart.dart';
 import '../../config/theme.dart';
 import '../../config/district_data.dart';
 import '../../providers/auth_provider.dart';
@@ -22,6 +23,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
 
   // Settings tab state
   String? _selectedDistrict;
+  String? _selectedTrendDistrict;
   final _priceController = TextEditingController();
   final _stockController = TextEditingController();
   bool _isSettingPrice = false;
@@ -59,6 +61,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
         index: _currentIndex,
         children: [
           _buildOverviewTab(),
+          _buildEggRatesTab(),
           _buildPaymentsTab(),
           _buildUsersTab(),
           _buildSettingsTab(),
@@ -79,6 +82,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
             type: BottomNavigationBarType.fixed,
             items: const [
               BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Overview'),
+              BottomNavigationBarItem(icon: Icon(Icons.trending_up), label: 'Rates'),
               BottomNavigationBarItem(icon: Icon(Icons.payment), label: 'Payments'),
               BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Users'),
               BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'Settings'),
@@ -1348,6 +1352,263 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
         backgroundColor: message.contains('✅') ? AppColors.success : Colors.amber.shade700,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
+  // ─── EGG RATES TAB (Trends + Auto Fetch) ────────────────
+  Widget _buildEggRatesTab() {
+    return Scaffold(
+      backgroundColor: AppColors.offWhite,
+      appBar: AppBar(
+        title: Text('Egg Rate Analysis', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+        automaticallyImplyLeading: false,
+        backgroundColor: AppColors.black,
+        actions: [
+          Consumer<AdminProvider>(
+            builder: (context, admin, _) {
+              return IconButton(
+                icon: const Icon(Icons.auto_awesome, color: AppColors.primary),
+                tooltip: 'Auto-fetch NECC Rates',
+                onPressed: admin.isLoading ? null : () async {
+                  final ok = await admin.autoFetchLatestPrices();
+                  if (ok) {
+                    _showSnack('NECC Rates updated successfully! ✅');
+                    if (_selectedTrendDistrict != null) {
+                      admin.fetchPriceTrends(_selectedTrendDistrict!);
+                    }
+                  } else if (admin.error != null) {
+                    _showSnack(admin.error!);
+                  }
+                },
+              );
+            },
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
+      body: Consumer<AdminProvider>(
+        builder: (context, admin, _) {
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Summary Section
+                Row(
+                  children: [
+                    _trendSummaryItem('Auto Fetch', 'Enabled', Icons.sync),
+                    const SizedBox(width: 12),
+                    _trendSummaryItem('Total Districts', '${DistrictData.dropdownItems.length}', Icons.location_city),
+                  ],
+                ),
+                const SizedBox(height: 20),
+
+                // District Selector for Trends
+                Text('Price Trends', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.darkGray)),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: AppColors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [BoxShadow(color: AppColors.black.withOpacity(0.04), blurRadius: 10)],
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      hint: Text('Select District to view trends', style: GoogleFonts.outfit(fontSize: 14)),
+                      value: _selectedTrendDistrict,
+                      isExpanded: true,
+                      icon: const Icon(Icons.arrow_drop_down, color: AppColors.primary),
+                      items: DistrictData.dropdownItems.map((item) {
+                        return DropdownMenuItem<String>(
+                          value: item['district'],
+                          child: Text(item['label']!, style: GoogleFonts.outfit(fontSize: 15)),
+                        );
+                      }).toList(),
+                      onChanged: (val) {
+                        setState(() => _selectedTrendDistrict = val);
+                        if (val != null) admin.fetchPriceTrends(val);
+                      },
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                // Chart Container
+                Container(
+                  height: 300,
+                  width: double.infinity,
+                  padding: const EdgeInsets.fromLTRB(10, 24, 24, 10),
+                  decoration: BoxDecoration(
+                    color: AppColors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    boxShadow: [BoxShadow(color: AppColors.black.withOpacity(0.04), blurRadius: 12)],
+                  ),
+                  child: admin.isLoadingTrends
+                    ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+                    : _selectedTrendDistrict == null
+                      ? Center(child: Text('Select a district above to see charts', style: GoogleFonts.outfit(color: AppColors.gray)))
+                      : admin.priceTrends.isEmpty
+                        ? Center(child: Text('No historical data available', style: GoogleFonts.outfit(color: AppColors.gray)))
+                        : LineChart(
+                            LineChartData(
+                              lineTouchData: LineTouchData(
+                                touchTooltipData: LineTouchTooltipData(
+                                  getTooltipColor: (spot) => AppColors.primaryDark,
+                                  getTooltipItems: (spots) {
+                                    return spots.map((spot) {
+                                      final index = admin.priceTrends.length - 1 - spot.x.toInt();
+                                      final dateStr = admin.priceTrends[index]['priceDate'] ?? admin.priceTrends[index]['price_date'];
+                                      final date = DateTime.parse(dateStr);
+                                      return LineTooltipItem(
+                                        '${DateFormat('MMM dd').format(date)}\n₹${spot.y}',
+                                        GoogleFonts.outfit(color: AppColors.white, fontWeight: FontWeight.bold),
+                                      );
+                                    }).toList();
+                                  },
+                                ),
+                              ),
+                              gridData: FlGridData(
+                                show: true,
+                                drawVerticalLine: false,
+                                getDrawingHorizontalLine: (value) => FlLine(
+                                  color: AppColors.gray.withOpacity(0.1),
+                                  strokeWidth: 1,
+                                ),
+                              ),
+                              titlesData: FlTitlesData(
+                                topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                                rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                                bottomTitles: AxisTitles(
+                                  axisNameWidget: Text('Date', style: GoogleFonts.outfit(fontSize: 12, color: AppColors.gray)),
+                                  sideTitles: SideTitles(
+                                    showTitles: true,
+                                    reservedSize: 30,
+                                    getTitlesWidget: (value, meta) {
+                                      final index = admin.priceTrends.length - 1 - value.toInt();
+                                      if (index < 0 || index >= admin.priceTrends.length) return const Text('');
+                                      
+                                      // Only show specific intervals for cleaner look
+                                      if (admin.priceTrends.length > 7 && value.toInt() % 3 != 0) return const Text('');
+                                      
+                                      final dateStr = admin.priceTrends[index]['priceDate'] ?? admin.priceTrends[index]['price_date'];
+                                      if (dateStr == null) return const Text('');
+                                      final date = DateTime.parse(dateStr);
+                                      return Padding(
+                                        padding: const EdgeInsets.only(top: 8),
+                                        child: Text(DateFormat('dd').format(date), style: GoogleFonts.outfit(fontSize: 10, color: AppColors.gray)),
+                                      );
+                                    },
+                                  ),
+                                ),
+                                leftTitles: AxisTitles(
+                                  axisNameWidget: Text('Price (₹)', style: GoogleFonts.outfit(fontSize: 12, color: AppColors.gray)),
+                                  sideTitles: SideTitles(
+                                    showTitles: true,
+                                    reservedSize: 40,
+                                    getTitlesWidget: (value, meta) {
+                                      return Text('₹${value.toStringAsFixed(1)}', style: GoogleFonts.outfit(fontSize: 10, color: AppColors.gray));
+                                    },
+                                  ),
+                                ),
+                              ),
+                              borderData: FlBorderData(show: false),
+                              lineBarsData: [
+                                LineChartBarData(
+                                  spots: admin.priceTrends.reversed.toList().asMap().entries.map((e) {
+                                    final priceValue = e.value['pricePerEgg'] ?? e.value['price_per_egg'];
+                                    double y = 0.0;
+                                    if (priceValue != null) {
+                                      y = double.tryParse(priceValue.toString()) ?? 0.0;
+                                    }
+                                    return FlSpot(e.key.toDouble(), y);
+                                  }).toList(),
+                                  isCurved: true,
+                                  color: AppColors.primary,
+                                  barWidth: 4,
+                                  isStrokeCapRound: true,
+                                  dotData: const FlDotData(show: true),
+                                  belowBarData: BarAreaData(
+                                    show: true,
+                                    color: AppColors.primary.withOpacity(0.1),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                ),
+                const SizedBox(height: 20),
+                Text('Horizontal axis represents dates. Vertical axis represents price per egg (₹).', 
+                  style: GoogleFonts.outfit(fontSize: 11, color: AppColors.gray)),
+                
+                const SizedBox(height: 30),
+                // Today's All Rates Summary
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text("Today's Rates", style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w700)),
+                    TextButton(
+                      onPressed: () => admin.fetchTodayPrices(),
+                      child: Text('Refresh', style: GoogleFonts.outfit(color: AppColors.primaryDark)),
+                    ),
+                  ],
+                ),
+                ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: admin.todayPrices.length,
+                  itemBuilder: (context, index) {
+                    final item = admin.todayPrices[index];
+                    final hasValue = item['pricePerEgg'] != null;
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        color: AppColors.white,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          Text(item['district'], style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
+                          const Spacer(),
+                          if (hasValue) ...[
+                            Text('₹${item['pricePerEgg']}', style: GoogleFonts.outfit(color: AppColors.primaryDark, fontWeight: FontWeight.w700)),
+                            const SizedBox(width: 8),
+                            Text('(₹${item['pricePerTray']}/Tray)', style: GoogleFonts.outfit(fontSize: 11, color: AppColors.gray, fontWeight: FontWeight.w500)),
+                          ] else
+                            Text('Not Set', style: GoogleFonts.outfit(fontSize: 12, color: AppColors.error, fontWeight: FontWeight.w600)),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _trendSummaryItem(String label, String value, IconData icon) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [BoxShadow(color: AppColors.black.withOpacity(0.04), blurRadius: 10)],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, color: AppColors.primary, size: 20),
+            const SizedBox(height: 8),
+            Text(value, style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.darkGray)),
+            Text(label, style: GoogleFonts.outfit(fontSize: 12, color: AppColors.gray)),
+          ],
+        ),
       ),
     );
   }

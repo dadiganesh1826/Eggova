@@ -135,6 +135,63 @@ router.get('/today-all', auth, adminOnly, async (req, res) => {
     }
 });
 
+const { scrapeNeccRates } = require('../services/scraper');
+
+// Admin: Auto-fetch NECC rates (Real-time Scraping with Full Month Backfill)
+router.post('/auto-fetch', auth, adminOnly, async (req, res) => {
+    try {
+        console.log('Admin triggered auto-fetch. Scraping full monthly NECC grid...');
+        const scrapedRates = await scrapeNeccRates(); // returns { district: { day: price } }
+
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth(); // 0-indexed
+
+        const syncResults = [];
+
+        for (const district of ALL_DISTRICTS) {
+            const dailyData = scrapedRates[district];
+            if (dailyData) {
+                let districtUpdateCount = 0;
+                for (const [day, pricePerEgg] of Object.entries(dailyData)) {
+                    // Construct YYYY-MM-DD
+                    const dateStr = `${currentYear}-${(currentMonth + 1).toString().padStart(2, '0')}-${day.padStart(2, '0')}`;
+                    const pricePerTray = Math.round(pricePerEgg * 30);
+
+                    // Clear existing for this specific date and set official official
+                    await EggPrice.destroy({ where: { district, priceDate: dateStr } });
+
+                    await EggPrice.create({
+                        district,
+                        pricePerEgg: parseFloat(pricePerEgg.toFixed(2)),
+                        pricePerTray,
+                        priceDate: dateStr,
+                        setBy: req.user.id
+                    });
+                    districtUpdateCount++;
+                }
+                syncResults.push({ district, records: districtUpdateCount });
+            }
+        }
+
+        if (syncResults.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'No rates found on NECC source. Please check connectivity.'
+            });
+        }
+
+        res.json({
+            success: true,
+            message: `Successfully synchronized ${syncResults.reduce((acc, curr) => acc + curr.records, 0)} historical records for ${syncResults.length} districts.`,
+            data: syncResults
+        });
+    } catch (error) {
+        console.error('Auto-fetch error:', error);
+        res.status(500).json({ success: false, message: error.message || 'Failed to sync historical rates' });
+    }
+});
+
 // ─── STOCK MANAGEMENT ────────────────────────────────────
 
 // Admin: Set / update daily stock limit

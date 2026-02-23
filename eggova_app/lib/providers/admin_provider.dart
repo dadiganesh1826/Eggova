@@ -130,6 +130,51 @@ class AdminProvider extends ChangeNotifier {
     } catch (_) {}
   }
 
+  List<Map<String, dynamic>> _priceTrends = [];
+  bool _isLoadingTrends = false;
+  List<Map<String, dynamic>> get priceTrends => _priceTrends;
+  bool get isLoadingTrends => _isLoadingTrends;
+
+  Future<void> fetchPriceTrends(String district) async {
+    _isLoadingTrends = true;
+    _priceTrends = [];
+    notifyListeners();
+    try {
+      final response = await _api.getPriceHistory(district: district);
+      if (response.data['success']) {
+        _priceTrends = (response.data['data'] as List)
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+      }
+    } catch (e) {
+      debugPrint('Error fetching trends: $e');
+    }
+    _isLoadingTrends = false;
+    notifyListeners();
+  }
+
+  Future<bool> autoFetchLatestPrices() async {
+    _isLoading = true;
+    _error = null;
+    _successMessage = null;
+    notifyListeners();
+    try {
+      final response = await _api.autoFetchPrices();
+      if (response.data['success']) {
+        await fetchTodayPrices();
+        _successMessage = response.data['message'];
+        _isLoading = false;
+        notifyListeners();
+        return true;
+      }
+    } catch (e) {
+      _error = 'Failed to auto-fetch rates';
+    }
+    _isLoading = false;
+    notifyListeners();
+    return false;
+  }
+
   Future<bool> setEggPrice(String district, double pricePerEgg) async {
     try {
       final response = await _api.setEggPrice({
