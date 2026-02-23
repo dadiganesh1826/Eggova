@@ -178,6 +178,52 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
                       Icons.hourglass_top,
                       AppColors.warning,
                     ).animate().fadeIn(delay: 500.ms, duration: 400.ms),
+                    const SizedBox(height: 24),
+
+                    // Offline Order Section
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(colors: [AppColors.black, Color(0xFF1A1A1A)]),
+                        borderRadius: BorderRadius.circular(24),
+                        boxShadow: [BoxShadow(color: AppColors.black.withOpacity(0.2), blurRadius: 15, offset: const Offset(0, 5))],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.1), shape: BoxShape.circle),
+                                child: const Icon(Icons.storefront, color: AppColors.primary, size: 20),
+                              ),
+                              const SizedBox(width: 12),
+                              Text('Offline Orders', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.white)),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text('Record sales for customers visiting the farm who do not use the app.', 
+                            style: GoogleFonts.outfit(fontSize: 13, color: AppColors.lightGray.withOpacity(0.8))),
+                          const SizedBox(height: 20),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 50,
+                            child: ElevatedButton.icon(
+                              onPressed: () => _showOfflineOrderDialog(),
+                              icon: const Icon(Icons.add_shopping_cart, size: 20),
+                              label: Text('Record Manual Order', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w700)),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.primary,
+                                foregroundColor: AppColors.black,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                elevation: 0,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ).animate().slideY(begin: 0.2, end: 0, duration: 500.ms, curve: Curves.easeOutQuad).fadeIn(),
                   ],
                 ),
               );
@@ -374,13 +420,25 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(user?.name ?? 'Unknown', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.darkGray)),
+                    Text(
+                      order.isOffline ? (order.customerName ?? 'Farm Visitor') : (user?.name ?? 'Unknown'), 
+                      style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.darkGray)
+                    ),
                     const SizedBox(height: 2),
-                    Text(user?.phone ?? '', style: GoogleFonts.outfit(fontSize: 13, color: AppColors.gray)),
+                    Text(
+                      order.isOffline ? (order.customerPhone ?? '') : (user?.phone ?? ''), 
+                      style: GoogleFonts.outfit(fontSize: 13, color: AppColors.gray)
+                    ),
                   ],
                 ),
               ),
-              if (order.isApprovalPending)
+              if (order.isOffline)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+                  child: Text('OFFLINE', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.primaryDark)),
+                )
+              else if (order.isApprovalPending)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                   decoration: BoxDecoration(color: AppColors.warning.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
@@ -1111,11 +1169,183 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
     );
   }
 
+  void _showOfflineOrderDialog() {
+    final nameController = TextEditingController();
+    final phoneController = TextEditingController();
+    final trayController = TextEditingController();
+    String selectedMethod = 'cash';
+    bool isSaving = false;
+    double currentTrayPrice = 0;
+
+    final admin = Provider.of<AdminProvider>(context, listen: false);
+    if (admin.todayPrices.isNotEmpty) {
+      currentTrayPrice = (admin.todayPrices.first['pricePerTray'] ?? 0).toDouble();
+    }
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final trayVal = int.tryParse(trayController.text.trim()) ?? 0;
+          final totalPrice = trayVal * currentTrayPrice;
+
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+            backgroundColor: AppColors.white,
+            title: Row(
+              children: [
+                const Icon(Icons.inventory_2_outlined, color: AppColors.primary),
+                const SizedBox(width: 12),
+                Text('Record Offline Order', style: GoogleFonts.outfit(fontWeight: FontWeight.w700, fontSize: 20)),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Customer Details', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.gray)),
+                  const SizedBox(height: 12),
+                  _dialogField(nameController, 'Customer Name', Icons.person_outline),
+                  const SizedBox(height: 12),
+                  _dialogField(phoneController, 'Phone Number', Icons.phone_android, keyboardType: TextInputType.phone),
+                  const SizedBox(height: 20),
+                  Text('Order Details', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.gray)),
+                  const SizedBox(height: 12),
+                  _dialogField(
+                    trayController, 
+                    'Number of Trays', 
+                    Icons.egg_outlined, 
+                    keyboardType: TextInputType.number,
+                    onChanged: (v) => setDialogState(() {}),
+                  ),
+                  if (trayVal > 0) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(14)),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Total Price:', style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 13)),
+                          Text(_currencyFormat.format(totalPrice), style: GoogleFonts.outfit(fontWeight: FontWeight.w800, color: AppColors.primaryDark, fontSize: 18)),
+                        ],
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 20),
+                  Text('Payment Method', style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.gray)),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      _paymentChip('Cash', Icons.payments_outlined, selectedMethod == 'cash', () => setDialogState(() => selectedMethod = 'cash')),
+                      const SizedBox(width: 10),
+                      _paymentChip('Pay Later', Icons.history, selectedMethod == 'pay_later', () => setDialogState(() => selectedMethod = 'pay_later')),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: isSaving ? null : () => Navigator.pop(context),
+                child: Text('Cancel', style: GoogleFonts.outfit(color: AppColors.gray, fontWeight: FontWeight.w600)),
+              ),
+              ElevatedButton(
+                onPressed: isSaving ? null : () async {
+                  final name = nameController.text.trim();
+                  final phone = phoneController.text.trim();
+                  final trays = int.tryParse(trayController.text.trim());
+
+                  if (name.isEmpty || phone.isEmpty || trays == null || trays < 1) {
+                    _showSnack('Please fill all fields correctly');
+                    return;
+                  }
+
+                  setDialogState(() => isSaving = true);
+                  final success = await admin.placeOfflineOrder(
+                    trayCount: trays,
+                    customerName: name,
+                    customerPhone: phone,
+                    paymentMethod: selectedMethod,
+                  );
+                  
+                  if (mounted) {
+                    setDialogState(() => isSaving = false);
+                    if (success) {
+                      Navigator.pop(context);
+                      _showSnack(admin.successMessage ?? 'Order recorded successfully \u2705');
+                    } else {
+                      _showSnack(admin.error ?? 'Failed to record order');
+                    }
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: AppColors.black,
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  elevation: 0,
+                ),
+                child: isSaving 
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.black))
+                  : Text('Save Order', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+              ),
+            ],
+          );
+        }
+      ),
+    );
+  }
+
+  Widget _paymentChip(String label, IconData icon, bool isSelected, VoidCallback onTap) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: 200.ms,
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: isSelected ? AppColors.primary : AppColors.offWhite,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: isSelected ? AppColors.primary : AppColors.lightGray.withOpacity(0.3)),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 16, color: isSelected ? AppColors.black : AppColors.gray),
+              const SizedBox(width: 6),
+              Text(label, style: GoogleFonts.outfit(fontSize: 13, fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500, color: isSelected ? AppColors.black : AppColors.gray)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _dialogField(TextEditingController controller, String hint, IconData icon, {TextInputType? keyboardType, Function(String)? onChanged}) {
+    return TextField(
+      controller: controller,
+      keyboardType: keyboardType,
+      onChanged: onChanged,
+      style: GoogleFonts.outfit(fontSize: 15),
+      decoration: InputDecoration(
+        hintText: hint,
+        prefixIcon: Icon(icon, color: AppColors.primary, size: 20),
+        filled: true,
+        fillColor: AppColors.offWhite,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      ),
+    );
+  }
+
   void _showSnack(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message, style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
-        backgroundColor: AppColors.success,
+        backgroundColor: message.contains('✅') ? AppColors.success : Colors.amber.shade700,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),

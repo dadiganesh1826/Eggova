@@ -76,12 +76,24 @@ router.post('/verify', auth, async (req, res) => {
             paymentStatus: 'completed',
             orderStatus: 'confirmed',
             paidAt: new Date(),
-            paidVia: 'razorpay',
+            paidVia: 'upi', // Standardizing as 'upi' for Razorpay in this context
         });
+
+        // Notify Admins about the receipt
+        const admins = await User.findAll({ where: { role: 'admin' } });
+        for (const admin of admins) {
+            await Notification.create({
+                userId: admin.id,
+                title: 'Payment Received! 💰',
+                message: `Online payment of ₹${order.totalAmount} received from ${req.user.name} for order ${order.orderNumber}`,
+                type: 'payment_received',
+                metadata: { orderId: order.id, amount: order.totalAmount, paidVia: 'upi' },
+            });
+        }
 
         res.json({
             success: true,
-            message: 'Payment verified successfully',
+            message: 'Payment verified and confirmed successfully',
             data: order,
         });
     } catch (error) {
@@ -134,7 +146,7 @@ router.post('/mark-paid', auth, adminOnly, async (req, res) => {
 
         const order = await Order.findOne({
             where: { id: orderId },
-            include: [{ model: User, as: 'user' }],
+            include: [{ model: User, as: 'user', required: false }],
         });
 
         if (!order) {
@@ -148,14 +160,16 @@ router.post('/mark-paid', auth, adminOnly, async (req, res) => {
             paidVia: paidVia || 'cash',
         });
 
-        // Notify user
-        await Notification.create({
-            userId: order.userId,
-            title: 'Payment Confirmed',
-            message: `Your payment of ₹${order.totalAmount} for order ${order.orderNumber} has been confirmed by admin`,
-            type: 'payment_approved',
-            metadata: { orderId: order.id },
-        });
+        // Notify user (if app user)
+        if (order.userId) {
+            await Notification.create({
+                userId: order.userId,
+                title: 'Payment Confirmed',
+                message: `Your payment of ₹${order.totalAmount} for order ${order.orderNumber} has been confirmed by admin`,
+                type: 'payment_approved',
+                metadata: { orderId: order.id },
+            });
+        }
 
         res.json({
             success: true,

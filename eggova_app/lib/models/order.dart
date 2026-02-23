@@ -3,7 +3,10 @@ import 'user.dart';
 class OrderModel {
   final String id;
   final String orderNumber;
-  final String userId;
+  final String? userId;
+  final String? customerName;
+  final String? customerPhone;
+  final bool isOffline;
   final int trayCount;
   final double pricePerTray;
   final double totalAmount;
@@ -20,7 +23,10 @@ class OrderModel {
   OrderModel({
     required this.id,
     required this.orderNumber,
-    required this.userId,
+    this.userId,
+    this.customerName,
+    this.customerPhone,
+    this.isOffline = false,
     required this.trayCount,
     required this.pricePerTray,
     required this.totalAmount,
@@ -52,11 +58,27 @@ class OrderModel {
     }
   }
 
+  String get paymentMethodLabel {
+    if (paymentStatus != 'completed') return '-';
+    switch (paidVia?.toLowerCase() ?? paymentMethod.toLowerCase()) {
+      case 'upi':
+      case 'razorpay':
+        return 'Paid via UPI';
+      case 'cash':
+        return 'Paid via Cash';
+      default:
+        return 'Paid via ${paidVia ?? paymentMethod}';
+    }
+  }
+
   factory OrderModel.fromJson(Map<String, dynamic> json) {
     return OrderModel(
       id: json['id'] ?? '',
       orderNumber: json['orderNumber'] ?? json['order_number'] ?? '',
-      userId: json['userId'] ?? json['user_id'] ?? '',
+      userId: json['userId'] ?? json['user_id'],
+      customerName: json['customerName'] ?? json['customer_name'],
+      customerPhone: json['customerPhone'] ?? json['customer_phone'],
+      isOffline: json['isOffline'] ?? json['is_offline'] ?? false,
       trayCount: json['trayCount'] ?? json['tray_count'] ?? 0,
       pricePerTray: (json['pricePerTray'] ?? json['price_per_tray'] ?? 0).toDouble(),
       totalAmount: (json['totalAmount'] ?? json['total_amount'] ?? 0).toDouble(),

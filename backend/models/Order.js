@@ -15,9 +15,24 @@ const Order = sequelize.define('Order', {
     },
     userId: {
         type: DataTypes.UUID,
-        allowNull: false,
+        allowNull: true,
         field: 'user_id',
         references: { model: 'users', key: 'id' },
+    },
+    customerName: {
+        type: DataTypes.STRING,
+        allowNull: true,
+        field: 'customer_name',
+    },
+    customerPhone: {
+        type: DataTypes.STRING,
+        allowNull: true,
+        field: 'customer_phone',
+    },
+    isOffline: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+        field: 'is_offline',
     },
     trayCount: {
         type: DataTypes.INTEGER,
@@ -36,7 +51,7 @@ const Order = sequelize.define('Order', {
         field: 'total_amount',
     },
     paymentMethod: {
-        type: DataTypes.ENUM('upi', 'pay_later'),
+        type: DataTypes.ENUM('upi', 'pay_later', 'cash'),
         allowNull: false,
         field: 'payment_method',
     },

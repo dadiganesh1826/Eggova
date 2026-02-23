@@ -331,11 +331,11 @@ class _UserDashboardState extends State<UserDashboard> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(price?.isToday == true ? Icons.circle : Icons.access_time,
-                            size: 10, color: price?.isToday == true ? AppColors.success : AppColors.darkGray),
+                        Icon(price?.isToday == true ? Icons.check_circle : Icons.warning_amber_rounded,
+                            size: 10, color: price?.isToday == true ? AppColors.success : AppColors.error),
                         const SizedBox(width: 6),
                         Text(
-                          price?.isToday == true ? "Today's Rate" : 'Latest Rate',
+                          price?.isToday == true ? "Today's Rate" : 'Price Pending',
                           style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.darkGray),
                         ),
                       ],
@@ -353,14 +353,15 @@ class _UserDashboardState extends State<UserDashboard> {
                 const Center(child: CircularProgressIndicator(color: AppColors.black))
               else if (price != null) ...[
                 Text(
-                  _currencyFormat.format(price.pricePerTray),
+                  price.isToday == true ? _currencyFormat.format(price.pricePerTray) : "₹--",
                   style: GoogleFonts.outfit(fontSize: 36, fontWeight: FontWeight.w900, color: AppColors.black),
                 ),
-                Text('per tray (${price.district})',
+                Text(price.isToday == true ? 'per tray (${price.district})' : 'Rate will be updated shortly',
                     style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.darkGray)),
                 const SizedBox(height: 4),
-                Text('₹${price.pricePerEgg.toStringAsFixed(2)} per egg',
-                    style: GoogleFonts.outfit(fontSize: 13, color: AppColors.darkGray.withOpacity(0.7))),
+                if (price.isToday == true)
+                  Text('₹${price.pricePerEgg.toStringAsFixed(2)} per egg',
+                      style: GoogleFonts.outfit(fontSize: 13, color: AppColors.darkGray.withOpacity(0.7))),
               ] else
                 Text('No price available', style: GoogleFonts.outfit(fontSize: 16, color: AppColors.darkGray)),
             ],
@@ -497,18 +498,50 @@ class _UserDashboardState extends State<UserDashboard> {
   Widget _buildCheckoutButtons() {
     return Consumer<OrderProvider>(
       builder: (context, provider, _) {
+        final bool isPriceMissing = provider.currentPrice?.isToday != true;
+        final bool isStockMissing = !provider.isStockSet || provider.availableTrays <= 0;
+        final bool isOrderDisabled = provider.isLoading || isPriceMissing || isStockMissing;
+
+        String? statusMsg;
+        if (!provider.isStockSet) {
+          statusMsg = "Today's stock limit has not been set yet.";
+        } else if (provider.availableTrays <= 0) {
+          statusMsg = "All stock for today has been sold out.";
+        } else if (isPriceMissing) {
+          statusMsg = "Today's egg rates are not updated yet.";
+        }
+
         return Column(
           children: [
+            if (statusMsg != null)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: AppColors.error.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.error.withOpacity(0.3)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.info_outline, size: 18, color: AppColors.error),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        statusMsg,
+                        style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.error),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             // UPI Payment button
             SizedBox(
               width: double.infinity,
               height: 56,
               child: ElevatedButton.icon(
-                onPressed: provider.isLoading ||
-                        provider.currentPrice == null ||
-                        (provider.isStockSet && provider.availableTrays <= 0)
-                    ? null
-                    : () => _placeOrder('upi'),
+                onPressed: isOrderDisabled ? null : () => _placeOrder('upi'),
                 icon: const Icon(Icons.payment, size: 22),
                 label: Text('Pay with UPI',
                     style: GoogleFonts.outfit(
@@ -516,6 +549,7 @@ class _UserDashboardState extends State<UserDashboard> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: AppColors.black,
+                  disabledBackgroundColor: AppColors.lightGray.withOpacity(0.5),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16)),
                   elevation: 0,
@@ -528,18 +562,14 @@ class _UserDashboardState extends State<UserDashboard> {
               width: double.infinity,
               height: 56,
               child: OutlinedButton.icon(
-                onPressed: provider.isLoading ||
-                        provider.currentPrice == null ||
-                        (provider.isStockSet && provider.availableTrays <= 0)
-                    ? null
-                    : () => _placeOrder('pay_later'),
+                onPressed: isOrderDisabled ? null : () => _placeOrder('pay_later'),
                 icon: const Icon(Icons.schedule, size: 22),
                 label: Text('Pay Later',
                     style: GoogleFonts.outfit(
                         fontSize: 16, fontWeight: FontWeight.w700)),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.darkGray,
-                  side: const BorderSide(color: AppColors.primary, width: 2),
+                  foregroundColor: isOrderDisabled ? AppColors.gray : AppColors.darkGray,
+                  side: BorderSide(color: isOrderDisabled ? AppColors.lightGray : AppColors.primary, width: 2),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16)),
                 ),
@@ -553,21 +583,49 @@ class _UserDashboardState extends State<UserDashboard> {
 
   Future<void> _placeOrder(String paymentMethod) async {
     final provider = Provider.of<OrderProvider>(context, listen: false);
-    final order = await provider.placeOrder(_trayCount, paymentMethod);
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+
+    final order = await provider.placeOrder(
+      _trayCount, 
+      paymentMethod,
+      userData: {
+        'name': auth.user?.name,
+        'phone': auth.user?.phone,
+        'email': auth.user?.email,
+      },
+    );
 
     if (order != null && mounted) {
+      if (paymentMethod != 'upi') {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Order ${order.orderNumber} placed successfully! 🎉', style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+        setState(() {
+          _trayCount = 1;
+          _currentIndex = 1; // Switch to orders tab
+        });
+      } else {
+        // For UPI, the SDK handles the payment. We'll refresh after closing.
+        setState(() {
+          _trayCount = 1;
+          _currentIndex = 1;
+        });
+      }
+    } else if (provider.error != null && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Order ${order.orderNumber} placed successfully! 🎉', style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
-          backgroundColor: AppColors.success,
+          content: Text(provider.error!, style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
+          backgroundColor: AppColors.error,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
-      setState(() {
-        _trayCount = 1;
-        _currentIndex = 1; // Switch to orders tab
-      });
+      provider.clearError();
     }
   }
 
@@ -671,6 +729,16 @@ class _UserDashboardState extends State<UserDashboard> {
               _orderDetail(Icons.calendar_today, DateFormat('dd MMM yyyy').format(order.createdAt)),
             ],
           ),
+          if (order.paymentStatus == 'completed') ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(Icons.payments_outlined, size: 14, color: AppColors.gray),
+                const SizedBox(width: 6),
+                Text(order.paymentMethodLabel, style: GoogleFonts.outfit(fontSize: 12, color: AppColors.gray, fontWeight: FontWeight.w500)),
+              ],
+            ),
+          ],
           const SizedBox(height: 12),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,

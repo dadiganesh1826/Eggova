@@ -47,22 +47,14 @@ router.post('/place', auth, async (req, res) => {
             });
         }
 
-        // Get current price
-        let price = await EggPrice.findOne({
+        // Get current price (Strictly today's)
+        const price = await EggPrice.findOne({
             where: { district: req.user.district, priceDate: today },
         });
 
         if (!price) {
-            price = await EggPrice.findOne({
-                where: { district: req.user.district },
-                order: [['price_date', 'DESC']],
-            });
-        }
-
-        if (!price) {
             return res.status(400).json({
-                success: false,
-                message: 'No egg price available for your district',
+                message: 'Egg rates for today have not been updated yet for your district. Please try again later.',
             });
         }
 

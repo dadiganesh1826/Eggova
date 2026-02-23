@@ -67,8 +67,23 @@ class ApiService {
   Future<Response> setDailyStock(int totalTrays) =>
       _dio.post('/egg-prices/set-stock', data: {'totalTrays': totalTrays});
 
-  Future<Response> getStockToday() => _dio.get('/egg-prices/stock-today');
+  Future<Response> getStockToday() async {
+    return await _dio.get('/egg-prices/stock-today');
+  }
 
+  Future<Response> placeOfflineOrder({
+    required int trayCount,
+    required String customerName,
+    required String customerPhone,
+    String paymentMethod = 'cash',
+  }) async {
+    return await _dio.post('/admin/place-offline-order', data: {
+      'trayCount': trayCount,
+      'customerName': customerName,
+      'customerPhone': customerPhone,
+      'paymentMethod': paymentMethod,
+    });
+  }
   // Orders
   Future<Response> placeOrder(int trayCount, String paymentMethod) =>
       _dio.post('/orders/place', data: {'trayCount': trayCount, 'paymentMethod': paymentMethod});

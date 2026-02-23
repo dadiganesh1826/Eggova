@@ -188,4 +188,42 @@ class AdminProvider extends ChangeNotifier {
     notifyListeners();
     return false;
   }
+
+  Future<bool> placeOfflineOrder({
+    required int trayCount,
+    required String customerName,
+    required String customerPhone,
+    String paymentMethod = 'cash',
+  }) async {
+    _error = null;
+    _successMessage = null;
+    try {
+      final response = await _api.placeOfflineOrder(
+        trayCount: trayCount,
+        customerName: customerName,
+        customerPhone: customerPhone,
+        paymentMethod: paymentMethod,
+      );
+      if (response.data['success']) {
+        _successMessage = response.data['message'];
+        // Refresh stock and stats
+        await fetchTodayStock();
+        await fetchDashboardStats();
+        notifyListeners();
+        return true;
+      } else {
+        _error = response.data['message'];
+      }
+    } on DioException catch (e) {
+      if (e.response != null && e.response!.data is Map) {
+        _error = e.response!.data['message'] ?? 'Failed to record offline order';
+      } else {
+        _error = 'Network error while recording offline order';
+      }
+    } catch (e) {
+      _error = 'Failed to record offline order';
+    }
+    notifyListeners();
+    return false;
+  }
 }
