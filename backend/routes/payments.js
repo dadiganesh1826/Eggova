@@ -102,6 +102,44 @@ router.post('/verify', auth, async (req, res) => {
     }
 });
 
+// Cancel a UPI order that was abandoned or failed at checkout
+router.post('/cancel-upi', auth, async (req, res) => {
+    try {
+        const { orderId } = req.body;
+
+        if (!orderId) {
+            return res.status(400).json({ success: false, message: 'Order ID is required' });
+        }
+
+        const order = await Order.findOne({
+            where: { id: orderId, userId: req.user.id },
+        });
+
+        if (!order) {
+            return res.status(404).json({ success: false, message: 'Order not found' });
+        }
+
+        // Only cancel if payment is still pending (not already verified)
+        if (order.paymentStatus !== 'pending') {
+            return res.status(400).json({ success: false, message: 'Order is not in a cancellable state' });
+        }
+
+        await order.update({
+            paymentStatus: 'failed',
+            orderStatus: 'cancelled',
+        });
+
+        res.json({
+            success: true,
+            message: 'Order cancelled due to payment failure',
+            data: order,
+        });
+    } catch (error) {
+        console.error('Cancel UPI order error:', error);
+        res.status(500).json({ success: false, message: 'Failed to cancel order' });
+    }
+});
+
 // User: Request payment completion (for pay-later orders)
 router.post('/request-completion', auth, async (req, res) => {
     try {

@@ -11,6 +11,7 @@ class OrderProvider extends ChangeNotifier {
   Map<String, dynamic> _todayStock = {};
   bool _isLoading = false;
   String? _error;
+  String? _pendingUpiOrderId; // Tracks order awaiting UPI payment
   late Razorpay _razorpay;
 
   List<OrderModel> get orders => _orders;
@@ -49,6 +50,7 @@ class OrderProvider extends ChangeNotifier {
       });
 
       if (verifyRes.data['success']) {
+        _pendingUpiOrderId = null; // Clear tracking after successful payment
         await fetchOrders();
         await fetchTodayStock();
       } else {
@@ -61,8 +63,20 @@ class OrderProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void _handlePaymentError(PaymentFailureResponse response) {
-    _error = response.message ?? 'Payment failed';
+  void _handlePaymentError(PaymentFailureResponse response) async {
+    // Cancel the pending order on the backend if payment fails / user goes back
+    if (_pendingUpiOrderId != null) {
+      try {
+        await _api.cancelUpiOrder(_pendingUpiOrderId!);
+        await fetchOrders(); // refresh orders list to show cancelled state
+      } catch (_) {
+        // Silently ignore, the error message will still show
+      }
+      _pendingUpiOrderId = null;
+    }
+    _error = response.message != null && response.message!.isNotEmpty
+        ? 'Payment failed: ${response.message}'
+        : 'Payment was cancelled or failed. Your order has been cancelled.';
     _isLoading = false;
     notifyListeners();
   }
@@ -122,9 +136,11 @@ class OrderProvider extends ChangeNotifier {
         final order = OrderModel.fromJson(response.data['data']);
         
         if (paymentMethod == 'upi') {
+          // Track the order ID so we can cancel it if payment fails
+          _pendingUpiOrderId = order.id;
           // Trigger Razorpay
           await _startRazorpay(order, userData);
-          return order; // Still return order, but payment happens asynchronously
+          return order;
         }
 
         _orders.insert(0, order);
@@ -163,10 +179,32 @@ class OrderProvider extends ChangeNotifier {
           'order_id': data['razorpayOrderId'],
           'description': 'Payment for Order ${order.orderNumber}',
           'timeout': 300, // in seconds
+          // Explicitly set UPI as method so all UPI apps (PhonePe, GPay, Paytm) work
+          'method': {
+            'netbanking': false,
+            'card': false,
+            'upi': true,
+            'wallet': false,
+          },
           'prefill': {
             'contact': userData?['phone'] ?? '',
             'email': userData?['email'] ?? '',
             'name': userData?['name'] ?? '',
+            'method': 'upi',
+          },
+          'config': {
+            'display': {
+              'blocks': {
+                'utib': {
+                  'name': 'Pay via UPI',
+                  'instruments': [
+                    {'method': 'upi'},
+                  ],
+                }
+              },
+              'sequence': ['block.utib'],
+              'preferences': {'show_default_blocks': false},
+            }
           }
         };
 

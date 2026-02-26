@@ -610,11 +610,16 @@ class _UserDashboardState extends State<UserDashboard> {
           _currentIndex = 1; // Switch to orders tab
         });
       } else {
-        // For UPI, the SDK handles the payment. We'll refresh after closing.
+        // For UPI: Razorpay overlay opens now.
+        // Reset tray count AND switch to orders tab (same as cash orders).
+        // On success → user sees confirmed order. On cancel → sees cancelled order + error snackbar.
         setState(() {
           _trayCount = 1;
-          _currentIndex = 1;
+          _currentIndex = 1; // Switch to orders tab
         });
+
+        // Listen on provider to show error snackbar if payment failed/cancelled
+        provider.addListener(_onUpiPaymentResult);
       }
     } else if (provider.error != null && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -769,6 +774,27 @@ class _UserDashboardState extends State<UserDashboard> {
         Text(text, style: GoogleFonts.outfit(fontSize: 13, color: AppColors.gray)),
       ],
     );
+  }
+
+  // Listener called after UPI payment result (success or failure)
+  void _onUpiPaymentResult() {
+    final provider = Provider.of<OrderProvider>(context, listen: false);
+    // Only act once the loading is done (payment result is in)
+    if (provider.isLoading) return;
+    // Remove listener so it only fires once
+    provider.removeListener(_onUpiPaymentResult);
+    if (provider.error != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(provider.error!, style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
+          backgroundColor: AppColors.error,
+          duration: const Duration(seconds: 4),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
+      provider.clearError();
+    }
   }
 
   void _showPaymentClaimDialog(dynamic order, OrderProvider provider) {

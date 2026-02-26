@@ -101,6 +101,9 @@ class ApiService {
   Future<Response> verifyPayment(Map<String, dynamic> data) =>
       _dio.post('/payments/verify', data: data);
 
+  Future<Response> cancelUpiOrder(String orderId) =>
+      _dio.post('/payments/cancel-upi', data: {'orderId': orderId});
+
   Future<Response> requestPaymentCompletion(String orderId, String paidVia) =>
       _dio.post('/payments/request-completion', data: {'orderId': orderId, 'paidVia': paidVia});
 
