@@ -21,6 +21,7 @@ const DISTRICT_STATE_MAP = {
     'Warangal': 'Telangana',
 };
 
+
 // Send OTP
 router.post('/send-otp', async (req, res) => {
     try {

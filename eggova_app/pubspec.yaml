@@ -21,6 +21,10 @@ dependencies:
   flutter_svg: ^2.0.9
   cached_network_image: ^3.3.1
   fl_chart: ^0.70.1
+  firebase_core: ^3.8.1
+  firebase_messaging: ^15.1.5
+  firebase_auth: ^5.3.1
+  flutter_local_notifications: ^17.2.4
 
 dev_dependencies:
   flutter_test:

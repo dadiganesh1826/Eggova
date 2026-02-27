@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../config/constants.dart';
 import '../models/user.dart';
 import '../services/api_service.dart';
+import '../services/notification_service.dart';
 
 class AuthProvider extends ChangeNotifier {
   UserModel? _user;
@@ -45,6 +46,8 @@ class AuthProvider extends ChangeNotifier {
         } catch (_) {
           // Use cached data if server is unavailable
         }
+        // Register FCM token now that we have auth
+        NotificationService.registerToken();
       }
     } catch (_) {
       // Clean start
@@ -78,7 +81,7 @@ class AuthProvider extends ChangeNotifier {
     return null;
   }
 
-  // Verify OTP (login or first step of registration)
+  // Verify OTP — login or first step of registration
   Future<Map<String, dynamic>?> verifyOtp(String phone, String otp,
       {String? name, String? district}) async {
     _isLoading = true;
@@ -87,16 +90,14 @@ class AuthProvider extends ChangeNotifier {
 
     try {
       final response = await _api.verifyOtp(phone, otp, name: name, district: district);
-
       if (response.data['success']) {
         final data = response.data['data'];
-
         if (data['token'] != null) {
           _token = data['token'];
           _user = UserModel.fromJson(data['user']);
           await _saveToStorage();
+          NotificationService.registerToken();
         }
-
         _isLoading = false;
         notifyListeners();
         return data;

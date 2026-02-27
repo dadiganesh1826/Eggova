@@ -20,6 +20,10 @@ class _UserDashboardState extends State<UserDashboard> {
   final _currencyFormat = NumberFormat.currency(locale: 'en_IN', symbol: '₹');
   final _trayController = TextEditingController(text: '1');
 
+  // Order history filters
+  String _orderFilterMode = 'all'; // 'all', 'upi', 'cash', 'pending'
+  DateTimeRange? _orderFilterDateRange;
+
   @override
   void initState() {
     super.initState();
@@ -471,10 +475,17 @@ class _UserDashboardState extends State<UserDashboard> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Total Amount', style: GoogleFonts.outfit(fontSize: 17, fontWeight: FontWeight.w700, color: AppColors.darkGray)),
-                  Text(
-                    _currencyFormat.format(total),
-                    style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.w900, color: AppColors.primaryDark),
+                  Flexible(
+                    child: Text('Total Amount', style: GoogleFonts.outfit(fontSize: 17, fontWeight: FontWeight.w700, color: AppColors.darkGray)),
+                  ),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      _currencyFormat.format(total),
+                      style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.w900, color: AppColors.primaryDark),
+                      textAlign: TextAlign.end,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 ],
               ),
@@ -489,8 +500,18 @@ class _UserDashboardState extends State<UserDashboard> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: GoogleFonts.outfit(fontSize: 14, color: AppColors.gray)),
-        Text(value, style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.darkGray)),
+        Flexible(
+          child: Text(label, style: GoogleFonts.outfit(fontSize: 14, color: AppColors.gray)),
+        ),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Text(
+            value,
+            style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.darkGray),
+            textAlign: TextAlign.end,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
       ],
     );
   }
@@ -642,6 +663,17 @@ class _UserDashboardState extends State<UserDashboard> {
         title: Text('Order History', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
         automaticallyImplyLeading: false,
         backgroundColor: AppColors.black,
+        actions: [
+          if (_orderFilterMode != 'all' || _orderFilterDateRange != null)
+            TextButton.icon(
+              onPressed: () => setState(() {
+                _orderFilterMode = 'all';
+                _orderFilterDateRange = null;
+              }),
+              icon: const Icon(Icons.close, size: 14, color: AppColors.error),
+              label: Text('Clear', style: GoogleFonts.outfit(fontSize: 12, color: AppColors.error)),
+            ),
+        ],
       ),
       body: Consumer<OrderProvider>(
         builder: (context, provider, _) {
@@ -649,33 +681,204 @@ class _UserDashboardState extends State<UserDashboard> {
             return const Center(child: CircularProgressIndicator(color: AppColors.primary));
           }
 
-          if (provider.orders.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.egg_outlined, size: 80, color: AppColors.lightGray),
-                  const SizedBox(height: 16),
-                  Text('No orders yet', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.gray)),
-                  Text('Place your first order!', style: GoogleFonts.outfit(fontSize: 14, color: AppColors.lightGray)),
-                ],
-              ),
-            );
-          }
+          // Apply filters
+          final filtered = provider.orders.where((order) {
+            // Payment mode filter
+            if (_orderFilterMode == 'upi') {
+              final via = (order.paidVia ?? order.paymentMethod).toLowerCase();
+              if (!via.contains('upi') && !via.contains('razorpay')) return false;
+            } else if (_orderFilterMode == 'cash') {
+              final via = (order.paidVia ?? order.paymentMethod).toLowerCase();
+              if (!via.contains('cash')) return false;
+            } else if (_orderFilterMode == 'pending') {
+              if (order.paymentStatus == 'completed') return false;
+            }
+            // Date range filter
+            if (_orderFilterDateRange != null) {
+              final date = order.createdAt;
+              if (date.isBefore(_orderFilterDateRange!.start) ||
+                  date.isAfter(_orderFilterDateRange!.end.add(const Duration(days: 1)))) return false;
+            }
+            return true;
+          }).toList();
 
-          return RefreshIndicator(
-            onRefresh: () => provider.fetchOrders(),
-            color: AppColors.primary,
-            child: ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: provider.orders.length,
-              itemBuilder: (context, index) {
-                final order = provider.orders[index];
-                return _buildOrderCard(order, provider).animate().fadeIn(delay: (index * 100).ms, duration: 400.ms);
-              },
-            ),
+          return Column(
+            children: [
+              // ── Filter Card ──
+              Container(
+                margin: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [AppColors.darkGray, AppColors.black.withOpacity(0.85)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: AppColors.primary.withOpacity(0.15), width: 1),
+                  boxShadow: [BoxShadow(color: AppColors.black.withOpacity(0.15), blurRadius: 12, offset: const Offset(0, 4))],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.tune_rounded, size: 14, color: AppColors.primary),
+                        const SizedBox(width: 6),
+                        Text('Filter Orders', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primary, letterSpacing: 0.5)),
+                        const Spacer(),
+                        if (_orderFilterMode != 'all' || _orderFilterDateRange != null)
+                          GestureDetector(
+                            onTap: () => setState(() { _orderFilterMode = 'all'; _orderFilterDateRange = null; }),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: AppColors.error.withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: AppColors.error.withOpacity(0.3)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.close, size: 11, color: AppColors.error),
+                                  const SizedBox(width: 4),
+                                  Text('Clear', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.error)),
+                                ],
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          _filterChip('All', 'all', _orderFilterMode, (v) => setState(() => _orderFilterMode = v)),
+                          const SizedBox(width: 8),
+                          _filterChip('UPI', 'upi', _orderFilterMode, (v) => setState(() => _orderFilterMode = v)),
+                          const SizedBox(width: 8),
+                          _filterChip('Cash', 'cash', _orderFilterMode, (v) => setState(() => _orderFilterMode = v)),
+                          const SizedBox(width: 8),
+                          _filterChip('Pending', 'pending', _orderFilterMode, (v) => setState(() => _orderFilterMode = v)),
+                          const SizedBox(width: 12),
+                          // Date range picker
+                          GestureDetector(
+                            onTap: () async {
+                              final range = await showDateRangePicker(
+                                context: context,
+                                firstDate: DateTime(2024),
+                                lastDate: DateTime.now(),
+                                initialDateRange: _orderFilterDateRange,
+                                builder: (context, child) => Theme(
+                                  data: ThemeData.dark().copyWith(
+                                    colorScheme: const ColorScheme.dark(primary: AppColors.primary, onPrimary: AppColors.black, surface: AppColors.darkGray),
+                                  ),
+                                  child: child!,
+                                ),
+                              );
+                              if (range != null) setState(() => _orderFilterDateRange = range);
+                            },
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                              decoration: BoxDecoration(
+                                color: _orderFilterDateRange != null ? AppColors.primary : Colors.transparent,
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(color: _orderFilterDateRange != null ? AppColors.primary : AppColors.gray.withOpacity(0.5)),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.date_range_rounded, size: 14, color: _orderFilterDateRange != null ? AppColors.black : AppColors.lightGray),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    _orderFilterDateRange != null
+                                        ? '${DateFormat('dd MMM').format(_orderFilterDateRange!.start)} – ${DateFormat('dd MMM').format(_orderFilterDateRange!.end)}'
+                                        : 'Date Range',
+                                    style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w600, color: _orderFilterDateRange != null ? AppColors.black : AppColors.lightGray),
+                                  ),
+                                  if (_orderFilterDateRange != null) ...[
+                                    const SizedBox(width: 6),
+                                    GestureDetector(
+                                      onTap: () => setState(() => _orderFilterDateRange = null),
+                                      child: Icon(Icons.close, size: 13, color: AppColors.black),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Orders list
+              Expanded(
+                child: filtered.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.filter_list_off, size: 64, color: AppColors.lightGray),
+                            const SizedBox(height: 12),
+                            Text('No orders match the filter', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.gray)),
+                            const SizedBox(height: 6),
+                            TextButton(
+                              onPressed: () => setState(() {
+                                _orderFilterMode = 'all';
+                                _orderFilterDateRange = null;
+                              }),
+                              child: Text('Clear filters', style: GoogleFonts.outfit(color: AppColors.primary, fontWeight: FontWeight.w600)),
+                            ),
+                          ],
+                        ),
+                      )
+                    : RefreshIndicator(
+                        onRefresh: () => provider.fetchOrders(),
+                        color: AppColors.primary,
+                        child: ListView.builder(
+                          padding: const EdgeInsets.all(16),
+                          itemCount: filtered.length,
+                          itemBuilder: (context, index) {
+                            final order = filtered[index];
+                            return _buildOrderCard(order, provider).animate().fadeIn(delay: (index * 80).ms, duration: 400.ms);
+                          },
+                        ),
+                      ),
+              ),
+            ],
           );
         },
+      ),
+    );
+  }
+
+  Widget _filterChip(String label, String value, String currentValue, ValueChanged<String> onTap) {
+    final isSelected = value == currentValue;
+    return GestureDetector(
+      onTap: () => onTap(value),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.primary : AppColors.darkGray,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? AppColors.primary : AppColors.gray.withOpacity(0.4),
+          ),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.outfit(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: isSelected ? AppColors.black : AppColors.lightGray,
+          ),
+        ),
       ),
     );
   }
@@ -711,7 +914,14 @@ class _UserDashboardState extends State<UserDashboard> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(order.orderNumber, style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.darkGray)),
+              Flexible(
+                child: Text(
+                  order.orderNumber,
+                  style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.darkGray),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(color: statusColor.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
@@ -748,9 +958,12 @@ class _UserDashboardState extends State<UserDashboard> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                _currencyFormat.format(order.totalAmount),
-                style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.primaryDark),
+              Flexible(
+                child: Text(
+                  _currencyFormat.format(order.totalAmount),
+                  style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.primaryDark),
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
               if (order.paymentStatus == 'pending')
                 TextButton.icon(

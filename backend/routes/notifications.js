@@ -54,4 +54,56 @@ router.put('/read-all', auth, async (req, res) => {
     }
 });
 
+// Save or update FCM device token (called on app launch/login)
+router.post('/fcm-token', auth, async (req, res) => {
+    try {
+        const { token } = req.body;
+        if (!token) return res.status(400).json({ success: false, message: 'Token required' });
+
+        const { User } = require('../models');
+        await User.update({ fcmToken: token }, { where: { id: req.user.id } });
+        res.json({ success: true, message: 'FCM token saved' });
+    } catch (error) {
+        console.error('FCM token save error:', error);
+        res.status(500).json({ success: false, message: 'Failed to save FCM token' });
+    }
+});
+
+// ── DEBUG: Check FCM tokens for all admins (admin only)
+router.get('/check-tokens', auth, async (req, res) => {
+    if (req.user.role !== 'admin') return res.status(403).json({ success: false, message: 'Admin only' });
+    try {
+        const { User } = require('../models');
+        const admins = await User.findAll({ where: { role: 'admin' }, attributes: ['id', 'name', 'phone', 'fcmToken'] });
+        const allUsers = await User.findAll({ attributes: ['id', 'name', 'role', 'fcmToken'] });
+        res.json({
+            success: true,
+            data: {
+                adminTokens: admins.map(a => ({ name: a.name, hasToken: !!a.fcmToken, tokenStart: a.fcmToken ? a.fcmToken.substring(0, 20) : null })),
+                allUsersWithTokens: allUsers.filter(u => u.fcmToken).length,
+                totalUsers: allUsers.length,
+            }
+        });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// ── DEBUG: Send a test push to yourself
+router.post('/test-push', auth, async (req, res) => {
+    try {
+        const { User } = require('../models');
+        const { sendPush } = require('../services/push');
+        const user = await User.findByPk(req.user.id);
+        if (!user.fcmToken) {
+            return res.json({ success: false, message: 'No FCM token saved for your account. Login again with the latest app.' });
+        }
+        await sendPush(user.fcmToken, '🔔 Test Notification', 'Push notifications are working! 🎉', { type: 'test' });
+        res.json({ success: true, message: `Test push sent to ${user.name}` });
+    } catch (error) {
+        console.error('Test push error:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
 module.exports = router;

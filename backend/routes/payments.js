@@ -4,6 +4,7 @@ const { Order, User, Notification } = require('../models');
 const auth = require('../middleware/auth');
 const adminOnly = require('../middleware/adminOnly');
 const razorpay = require('../config/razorpay');
+const { sendPushToMany } = require('../services/push');
 
 const router = express.Router();
 
@@ -81,6 +82,7 @@ router.post('/verify', auth, async (req, res) => {
 
         // Notify Admins about the receipt
         const admins = await User.findAll({ where: { role: 'admin' } });
+        const adminFcmTokens = admins.map(a => a.fcmToken).filter(Boolean);
         for (const admin of admins) {
             await Notification.create({
                 userId: admin.id,
@@ -90,6 +92,13 @@ router.post('/verify', auth, async (req, res) => {
                 metadata: { orderId: order.id, amount: order.totalAmount, paidVia: 'upi' },
             });
         }
+        // Also send push notification to admin devices
+        await sendPushToMany(
+            adminFcmTokens,
+            '💰 Payment Received!',
+            `₹${order.totalAmount} from ${req.user.name} (${order.orderNumber}) via UPI`,
+            { orderId: order.id, type: 'payment_received' },
+        );
 
         res.json({
             success: true,

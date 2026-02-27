@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "408646721911",
+    "project_id": "eggova-app",
+    "storage_bucket": "eggova-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:408646721911:android:41475a06a0ecc302c98172",
+        "android_client_info": {
+          "package_name": "com.example.eggova"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAFDWa9ehmW0Drw2gXc_fvPBVC7a7E5u74"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

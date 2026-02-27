@@ -128,6 +128,10 @@ class ApiService {
   Future<Response> markNotificationRead(String id) =>
       _dio.put('/notifications/read/$id');
 
+  Future<Response> saveFcmToken(String token) =>
+      _dio.post('/notifications/fcm-token', data: {'token': token});
+
+
   Future<Response> markAllNotificationsRead() =>
       _dio.put('/notifications/read-all');
 }

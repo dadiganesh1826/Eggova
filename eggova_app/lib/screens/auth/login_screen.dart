@@ -27,6 +27,7 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _otpSent = false;
   bool _isExistingUser = false;
 
+
   @override
   void dispose() {
     _phoneController.dispose();

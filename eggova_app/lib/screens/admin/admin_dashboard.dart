@@ -29,6 +29,11 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
   bool _isSettingPrice = false;
   bool _isSettingStock = false;
 
+  // Payment filters
+  String _completedFilterMode = 'all'; // 'all', 'upi', 'cash'
+  DateTimeRange? _completedFilterDate;
+  DateTimeRange? _pendingFilterDate;
+
   @override
   void initState() {
     super.initState();
@@ -154,7 +159,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
                       mainAxisSpacing: 14,
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
-                      childAspectRatio: 1.25,
+                      childAspectRatio: 2.2,
                       children: [
                         _statCard('Total Users', '${stats['totalUsers'] ?? 0}', Icons.people, AppColors.info)
                             .animate().fadeIn(duration: 400.ms),
@@ -240,23 +245,34 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
 
   Widget _statCard(String label, String value, IconData icon, Color color) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         color: AppColors.white,
         borderRadius: BorderRadius.circular(20),
         boxShadow: [BoxShadow(color: AppColors.black.withOpacity(0.04), blurRadius: 12, offset: const Offset(0, 4))],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: Row(
         children: [
           Container(
-            width: 40, height: 40,
-            decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(12)),
-            child: Icon(icon, color: color, size: 22),
+            width: 36, height: 36,
+            decoration: BoxDecoration(color: color.withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
+            child: Icon(icon, color: color, size: 20),
           ),
-          Text(value, style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.w800, color: AppColors.darkGray)),
-          Text(label, style: GoogleFonts.outfit(fontSize: 12, color: AppColors.gray)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(value, style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.darkGray)),
+                ),
+                Text(label, style: GoogleFonts.outfit(fontSize: 10, color: AppColors.gray), overflow: TextOverflow.ellipsis, maxLines: 1),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -331,31 +347,145 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
           return const Center(child: CircularProgressIndicator(color: AppColors.primary));
         }
 
-        if (admin.pendingPayments.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.check_circle_outline, size: 80, color: AppColors.success.withOpacity(0.4)),
-                const SizedBox(height: 16),
-                Text('No pending payments!', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.gray)),
-              ],
-            ),
-          );
-        }
+        final filtered = admin.pendingPayments.where((order) {
+          if (_pendingFilterDate != null) {
+            final date = order.createdAt;
+            if (date.isBefore(_pendingFilterDate!.start) ||
+                date.isAfter(_pendingFilterDate!.end.add(const Duration(days: 1)))) return false;
+          }
+          return true;
+        }).toList();
 
-        return RefreshIndicator(
-          onRefresh: () => admin.fetchPendingPayments(),
-          color: AppColors.primary,
-          child: ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: admin.pendingPayments.length,
-            itemBuilder: (context, index) {
-              final order = admin.pendingPayments[index];
-              return _buildAdminPaymentCard(order, isPending: true)
-                  .animate().fadeIn(delay: (index * 80).ms, duration: 400.ms);
-            },
-          ),
+        return Column(
+          children: [
+            // ── Pending Filter Card ──
+            Container(
+              margin: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [AppColors.darkGray, AppColors.black.withOpacity(0.85)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: AppColors.primary.withOpacity(0.15), width: 1),
+                boxShadow: [BoxShadow(color: AppColors.black.withOpacity(0.12), blurRadius: 10, offset: const Offset(0, 4))],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.tune_rounded, size: 14, color: AppColors.primary),
+                      const SizedBox(width: 6),
+                      Text('Filter by Date', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primary, letterSpacing: 0.5)),
+                      const Spacer(),
+                      if (_pendingFilterDate != null)
+                        GestureDetector(
+                          onTap: () => setState(() => _pendingFilterDate = null),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: AppColors.error.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: AppColors.error.withOpacity(0.3)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.close, size: 11, color: AppColors.error),
+                                const SizedBox(width: 4),
+                                Text('Clear', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.error)),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  GestureDetector(
+                    onTap: () async {
+                      final range = await showDateRangePicker(
+                        context: context,
+                        firstDate: DateTime(2024),
+                        lastDate: DateTime.now(),
+                        initialDateRange: _pendingFilterDate,
+                        builder: (ctx, child) => Theme(
+                          data: ThemeData.dark().copyWith(
+                            colorScheme: const ColorScheme.dark(primary: AppColors.primary, onPrimary: AppColors.black, surface: AppColors.darkGray),
+                          ),
+                          child: child!,
+                        ),
+                      );
+                      if (range != null) setState(() => _pendingFilterDate = range);
+                    },
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: _pendingFilterDate != null ? AppColors.primary : Colors.transparent,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: _pendingFilterDate != null ? AppColors.primary : AppColors.gray.withOpacity(0.5)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.date_range_rounded, size: 14, color: _pendingFilterDate != null ? AppColors.black : AppColors.lightGray),
+                          const SizedBox(width: 6),
+                          Text(
+                            _pendingFilterDate != null
+                                ? '${DateFormat('dd MMM').format(_pendingFilterDate!.start)} – ${DateFormat('dd MMM').format(_pendingFilterDate!.end)}'
+                                : 'Select Date Range',
+                            style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w600, color: _pendingFilterDate != null ? AppColors.black : AppColors.lightGray),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: filtered.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(admin.pendingPayments.isEmpty
+                              ? Icons.check_circle_outline
+                              : Icons.filter_list_off,
+                            size: 80, color: AppColors.success.withOpacity(0.4)),
+                          const SizedBox(height: 16),
+                          Text(
+                            admin.pendingPayments.isEmpty ? 'No pending payments!' : 'No payments match the filter',
+                            style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.gray),
+                          ),
+                          if (_pendingFilterDate != null) ...[
+                            const SizedBox(height: 6),
+                            TextButton(
+                              onPressed: () => setState(() => _pendingFilterDate = null),
+                              child: Text('Clear filter', style: GoogleFonts.outfit(color: AppColors.primary, fontWeight: FontWeight.w600)),
+                            ),
+                          ],
+                        ],
+                      ),
+                    )
+                  : RefreshIndicator(
+                      onRefresh: () => admin.fetchPendingPayments(),
+                      color: AppColors.primary,
+                      child: ListView.builder(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: filtered.length,
+                        itemBuilder: (context, index) {
+                          final order = filtered[index];
+                          return _buildAdminPaymentCard(order, isPending: true)
+                              .animate().fadeIn(delay: (index * 80).ms, duration: 400.ms);
+                        },
+                      ),
+                    ),
+            ),
+          ],
         );
       },
     );
@@ -368,33 +498,236 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
           return const Center(child: CircularProgressIndicator(color: AppColors.primary));
         }
 
-        if (admin.completedPayments.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.history, size: 80, color: AppColors.lightGray),
-                const SizedBox(height: 16),
-                Text('No completed payments yet', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.gray)),
-              ],
-            ),
-          );
-        }
+        final filtered = admin.completedPayments.where((order) {
+          // Payment mode filter
+          if (_completedFilterMode == 'upi') {
+            final via = (order.paidVia ?? order.paymentMethod ?? '').toLowerCase();
+            if (!via.contains('upi') && !via.contains('razorpay')) return false;
+          } else if (_completedFilterMode == 'cash') {
+            final via = (order.paidVia ?? order.paymentMethod ?? '').toLowerCase();
+            if (!via.contains('cash')) return false;
+          }
+          // Date filter
+          if (_completedFilterDate != null) {
+            final date = order.paidAt ?? order.createdAt;
+            if (date.isBefore(_completedFilterDate!.start) ||
+                date.isAfter(_completedFilterDate!.end.add(const Duration(days: 1)))) return false;
+          }
+          return true;
+        }).toList();
 
-        return RefreshIndicator(
-          onRefresh: () => admin.fetchCompletedPayments(),
-          color: AppColors.primary,
-          child: ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: admin.completedPayments.length,
-            itemBuilder: (context, index) {
-              final order = admin.completedPayments[index];
-              return _buildAdminPaymentCard(order, isPending: false)
-                  .animate().fadeIn(delay: (index * 80).ms, duration: 400.ms);
-            },
-          ),
+        return Column(
+          children: [
+            // ── Completed Filter Card ──
+            Container(
+              margin: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [AppColors.darkGray, AppColors.black.withOpacity(0.85)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: AppColors.primary.withOpacity(0.15), width: 1),
+                boxShadow: [BoxShadow(color: AppColors.black.withOpacity(0.12), blurRadius: 10, offset: const Offset(0, 4))],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.tune_rounded, size: 14, color: AppColors.primary),
+                      const SizedBox(width: 6),
+                      Text('Filter Payments', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primary, letterSpacing: 0.5)),
+                      const Spacer(),
+                      if (_completedFilterMode != 'all' || _completedFilterDate != null)
+                        GestureDetector(
+                          onTap: () => setState(() { _completedFilterMode = 'all'; _completedFilterDate = null; }),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: AppColors.error.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: AppColors.error.withOpacity(0.3)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.close, size: 11, color: AppColors.error),
+                                const SizedBox(width: 4),
+                                Text('Clear', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.error)),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        _adminPayModeChip('All', 'all'),
+                        const SizedBox(width: 8),
+                        _adminPayModeChip('UPI', 'upi'),
+                        const SizedBox(width: 8),
+                        _adminPayModeChip('Cash', 'cash'),
+                        const SizedBox(width: 12),
+                        GestureDetector(
+                          onTap: () async {
+                            final range = await showDateRangePicker(
+                              context: context,
+                              firstDate: DateTime(2024),
+                              lastDate: DateTime.now(),
+                              initialDateRange: _completedFilterDate,
+                              builder: (ctx, child) => Theme(
+                                data: ThemeData.dark().copyWith(
+                                  colorScheme: const ColorScheme.dark(primary: AppColors.primary, onPrimary: AppColors.black, surface: AppColors.darkGray),
+                                ),
+                                child: child!,
+                              ),
+                            );
+                            if (range != null) setState(() => _completedFilterDate = range);
+                          },
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: _completedFilterDate != null ? AppColors.primary : Colors.transparent,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: _completedFilterDate != null ? AppColors.primary : AppColors.gray.withOpacity(0.5)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.date_range_rounded, size: 14, color: _completedFilterDate != null ? AppColors.black : AppColors.lightGray),
+                                const SizedBox(width: 6),
+                                Text(
+                                  _completedFilterDate != null
+                                      ? '${DateFormat('dd MMM').format(_completedFilterDate!.start)} – ${DateFormat('dd MMM').format(_completedFilterDate!.end)}'
+                                      : 'Date Range',
+                                  style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w600, color: _completedFilterDate != null ? AppColors.black : AppColors.lightGray),
+                                ),
+                                if (_completedFilterDate != null) ...[
+                                  const SizedBox(width: 6),
+                                  GestureDetector(
+                                    onTap: () => setState(() => _completedFilterDate = null),
+                                    child: Icon(Icons.close, size: 13, color: AppColors.black),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: filtered.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(admin.completedPayments.isEmpty
+                              ? Icons.history
+                              : Icons.filter_list_off,
+                            size: 80, color: AppColors.lightGray),
+                          const SizedBox(height: 16),
+                          Text(
+                            admin.completedPayments.isEmpty ? 'No completed payments yet' : 'No payments match the filter',
+                            style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.gray),
+                          ),
+                          if (_completedFilterMode != 'all' || _completedFilterDate != null) ...[
+                            const SizedBox(height: 6),
+                            TextButton(
+                              onPressed: () => setState(() {
+                                _completedFilterMode = 'all';
+                                _completedFilterDate = null;
+                              }),
+                              child: Text('Clear filters', style: GoogleFonts.outfit(color: AppColors.primary, fontWeight: FontWeight.w600)),
+                            ),
+                          ],
+                        ],
+                      ),
+                    )
+                  : RefreshIndicator(
+                      onRefresh: () => admin.fetchCompletedPayments(),
+                      color: AppColors.primary,
+                      child: ListView.builder(
+                        padding: const EdgeInsets.all(16),
+                        itemCount: filtered.length,
+                        itemBuilder: (context, index) {
+                          final order = filtered[index];
+                          return _buildAdminPaymentCard(order, isPending: false)
+                              .animate().fadeIn(delay: (index * 80).ms, duration: 400.ms);
+                        },
+                      ),
+                    ),
+            ),
+          ],
         );
       },
+    );
+  }
+
+  Widget _adminPayModeChip(String label, String value) {
+    final isSelected = value == _completedFilterMode;
+    return GestureDetector(
+      onTap: () => setState(() => _completedFilterMode = value),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.primary : AppColors.darkGray,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: isSelected ? AppColors.primary : AppColors.gray.withOpacity(0.4)),
+        ),
+        child: Text(label, style: GoogleFonts.outfit(
+          fontSize: 12, fontWeight: FontWeight.w600,
+          color: isSelected ? AppColors.black : AppColors.lightGray,
+        )),
+      ),
+    );
+  }
+
+  Widget _adminFilterDateBtn(DateTimeRange? range, {required VoidCallback onTap, required VoidCallback onClear}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: range != null ? AppColors.primary : AppColors.darkGray,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: range != null ? AppColors.primary : AppColors.gray.withOpacity(0.4)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.calendar_today, size: 13, color: range != null ? AppColors.black : AppColors.lightGray),
+            const SizedBox(width: 6),
+            Text(
+              range != null
+                  ? '${DateFormat('dd MMM').format(range.start)} – ${DateFormat('dd MMM').format(range.end)}'
+                  : 'Date Range',
+              style: GoogleFonts.outfit(
+                fontSize: 12, fontWeight: FontWeight.w600,
+                color: range != null ? AppColors.black : AppColors.lightGray,
+              ),
+            ),
+            if (range != null) ...[
+              const SizedBox(width: 6),
+              GestureDetector(
+                onTap: onClear,
+                child: Icon(Icons.close, size: 13, color: AppColors.black),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 
@@ -453,13 +786,13 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
 
           const SizedBox(height: 14),
 
-          // Order details row
-          Row(
+          // Order details — Wrap so chips flow on narrow screens
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
             children: [
               _detailChip(Icons.egg, '${order.trayCount} trays'),
-              const SizedBox(width: 10),
               _detailChip(Icons.calendar_today, DateFormat('dd MMM').format(order.createdAt)),
-              const SizedBox(width: 10),
               _detailChip(Icons.tag, order.orderNumber),
             ],
           ),
@@ -1459,10 +1792,14 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
                                   getTooltipItems: (spots) {
                                     return spots.map((spot) {
                                       final index = admin.priceTrends.length - 1 - spot.x.toInt();
+                                      if (index < 0 || index >= admin.priceTrends.length) {
+                                        return LineTooltipItem('', GoogleFonts.outfit(color: AppColors.white));
+                                      }
                                       final dateStr = admin.priceTrends[index]['priceDate'] ?? admin.priceTrends[index]['price_date'];
-                                      final date = DateTime.parse(dateStr);
+                                      final date = dateStr != null ? DateTime.tryParse(dateStr.toString()) : null;
+                                      final label = date != null ? DateFormat('MMM dd').format(date) : '?';
                                       return LineTooltipItem(
-                                        '${DateFormat('MMM dd').format(date)}\n₹${spot.y}',
+                                        '$label\n₹${spot.y}',
                                         GoogleFonts.outfit(color: AppColors.white, fontWeight: FontWeight.bold),
                                       );
                                     }).toList();
@@ -1494,7 +1831,8 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
                                       
                                       final dateStr = admin.priceTrends[index]['priceDate'] ?? admin.priceTrends[index]['price_date'];
                                       if (dateStr == null) return const Text('');
-                                      final date = DateTime.parse(dateStr);
+                                      final date = DateTime.tryParse(dateStr.toString());
+                                      if (date == null) return const Text('');
                                       return Padding(
                                         padding: const EdgeInsets.only(top: 8),
                                         child: Text(DateFormat('dd').format(date), style: GoogleFonts.outfit(fontSize: 10, color: AppColors.gray)),

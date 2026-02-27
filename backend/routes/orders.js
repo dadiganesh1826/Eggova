@@ -1,6 +1,7 @@
 const express = require('express');
 const { Order, User, EggPrice, DailyStock, Notification } = require('../models');
 const auth = require('../middleware/auth');
+const { sendPushToMany } = require('../services/push');
 
 const router = express.Router();
 
@@ -107,6 +108,18 @@ router.post('/place', auth, async (req, res) => {
                 });
             }
             await stock.update({ outOfStockNotified: true });
+        }
+
+        // ── Push notification: only for pay_later (cash) orders ──
+        // UPI orders get notified ONLY after payment is verified (in /payments/verify)
+        if (paymentMethod === 'pay_later') {
+            const adminFcmTokens = adminUsers.map(a => a.fcmToken).filter(Boolean);
+            await sendPushToMany(
+                adminFcmTokens,
+                '📋 New Cash Order!',
+                `${req.user.name} ordered ${trayCount} tray(s) — ₹${totalAmount.toFixed(2)} (Pay Later)`,
+                { orderId: order.id, type: 'new_order_cash' },
+            );
         }
 
         res.status(201).json({
