@@ -44,8 +44,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   Future<void> _saveProfile() async {
+    if (_isSaving) return;
+
     final name = _nameController.text.trim();
     if (name.isEmpty) {
+      ScaffoldMessenger.of(context).clearSnackBars();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Name cannot be empty')),
       );

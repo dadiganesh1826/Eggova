@@ -26,85 +26,115 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool _otpSent = false;
   bool _isExistingUser = false;
-
+  bool _isLoading = false;
 
   @override
   void dispose() {
     _phoneController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
-    for (final c in _otpControllers) { c.dispose(); }
-    for (final f in _otpFocusNodes) { f.dispose(); }
+    for (final c in _otpControllers) {
+      c.dispose();
+    }
+    for (final f in _otpFocusNodes) {
+      f.dispose();
+    }
     super.dispose();
   }
 
   Future<void> _adminLogin() async {
+    if (_isLoading) return;
+
     final email = _emailController.text.trim();
     final password = _passwordController.text;
+
     if (email.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).clearSnackBars();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter email and password')),
       );
       return;
     }
 
-    final auth = Provider.of<AuthProvider>(context, listen: false);
-    final success = await auth.login(email, password);
+    setState(() => _isLoading = true);
+    try {
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      final success = await auth.login(email, password);
 
-    if (success && mounted) {
-      if (auth.isAdmin) {
-        Navigator.pushReplacementNamed(context, '/admin-dashboard');
-      } else {
-        Navigator.pushReplacementNamed(context, '/user-dashboard');
+      if (success && mounted) {
+        if (auth.isAdmin) {
+          Navigator.pushReplacementNamed(context, '/admin-dashboard');
+        } else {
+          Navigator.pushReplacementNamed(context, '/user-dashboard');
+        }
       }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _sendOtp() async {
+    if (_isLoading) return;
+
     final phone = _phoneController.text.trim();
     if (phone.length < 10) {
+      ScaffoldMessenger.of(context).clearSnackBars();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a valid 10-digit mobile number')),
+        const SnackBar(
+            content: Text('Please enter a valid 10-digit mobile number')),
       );
       return;
     }
 
-    final auth = Provider.of<AuthProvider>(context, listen: false);
-    final result = await auth.sendOtp(phone);
+    setState(() => _isLoading = true);
+    try {
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      final result = await auth.sendOtp(phone);
 
-    if (result != null && mounted) {
-      setState(() {
-        _otpSent = true;
-        _isExistingUser = result['isExistingUser'] ?? false;
-      });
-      // Focus first OTP field
-      _otpFocusNodes[0].requestFocus();
+      if (result != null && mounted) {
+        setState(() {
+          _otpSent = true;
+          _isExistingUser = result['isExistingUser'] ?? false;
+        });
+        // Focus first OTP field
+        _otpFocusNodes[0].requestFocus();
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _verifyOtp() async {
+    if (_isLoading) return;
+
     final otp = _otpControllers.map((c) => c.text).join();
     if (otp.length != 4) {
+      ScaffoldMessenger.of(context).clearSnackBars();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter the complete 4-digit OTP')),
       );
       return;
     }
 
-    final auth = Provider.of<AuthProvider>(context, listen: false);
-    final phone = _phoneController.text.trim();
-    final result = await auth.verifyOtp(phone, otp);
+    setState(() => _isLoading = true);
+    try {
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      final phone = _phoneController.text.trim();
+      final result = await auth.verifyOtp(phone, otp);
 
-    if (result != null && mounted) {
-      if (result['isNewUser'] == true && result['token'] == null) {
-        // New user — needs to complete profile
-        Navigator.pushReplacementNamed(context, '/complete-profile',
-            arguments: phone);
-      } else if (auth.isAdmin) {
-        Navigator.pushReplacementNamed(context, '/admin-dashboard');
-      } else {
-        Navigator.pushReplacementNamed(context, '/user-dashboard');
+      if (result != null && mounted) {
+        if (result['isNewUser'] == true && result['token'] == null) {
+          // New user — needs to complete profile
+          Navigator.pushReplacementNamed(context, '/complete-profile',
+              arguments: phone);
+        } else if (auth.isAdmin) {
+          Navigator.pushReplacementNamed(context, '/admin-dashboard');
+        } else {
+          Navigator.pushReplacementNamed(context, '/user-dashboard');
+        }
       }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -157,7 +187,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ],
                   ),
-                  child: const Icon(Icons.egg, size: 48, color: AppColors.black),
+                  child:
+                      const Icon(Icons.egg, size: 48, color: AppColors.black),
                 ).animate().fadeIn(duration: 600.ms).scale(
                     begin: const Offset(0.8, 0.8),
                     end: const Offset(1, 1),
@@ -210,14 +241,18 @@ class _LoginScreenState extends State<LoginScreen> {
                           decoration: BoxDecoration(
                             color: AppColors.error.withOpacity(0.1),
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: AppColors.error.withOpacity(0.3)),
+                            border: Border.all(
+                                color: AppColors.error.withOpacity(0.3)),
                           ),
                           child: Row(
                             children: [
-                              const Icon(Icons.error_outline, color: AppColors.error, size: 20),
+                              const Icon(Icons.error_outline,
+                                  color: AppColors.error, size: 20),
                               const SizedBox(width: 8),
                               Expanded(
-                                child: Text(auth.error!, style: GoogleFonts.outfit(color: AppColors.error, fontSize: 13)),
+                                child: Text(auth.error!,
+                                    style: GoogleFonts.outfit(
+                                        color: AppColors.error, fontSize: 13)),
                               ),
                             ],
                           ),
@@ -274,9 +309,12 @@ class _LoginScreenState extends State<LoginScreen> {
                       onTap: () {
                         setState(() {
                           _otpSent = false;
-                          for (final c in _otpControllers) { c.clear(); }
+                          for (final c in _otpControllers) {
+                            c.clear();
+                          }
                         });
-                        Provider.of<AuthProvider>(context, listen: false).clearError();
+                        Provider.of<AuthProvider>(context, listen: false)
+                            .clearError();
                       },
                       child: Text(
                         'Change Number',
@@ -296,8 +334,11 @@ class _LoginScreenState extends State<LoginScreen> {
                 if (!_isAdminMode && !_otpSent)
                   GestureDetector(
                     onTap: () {
-                      setState(() { _isAdminMode = true; });
-                      Provider.of<AuthProvider>(context, listen: false).clearError();
+                      setState(() {
+                        _isAdminMode = true;
+                      });
+                      Provider.of<AuthProvider>(context, listen: false)
+                          .clearError();
                     },
                     child: Text(
                       'Admin? Login here',
@@ -314,8 +355,11 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 12),
                   GestureDetector(
                     onTap: () {
-                      setState(() { _isAdminMode = false; });
-                      Provider.of<AuthProvider>(context, listen: false).clearError();
+                      setState(() {
+                        _isAdminMode = false;
+                      });
+                      Provider.of<AuthProvider>(context, listen: false)
+                          .clearError();
                     },
                     child: Text(
                       'Back to Phone Login',
@@ -377,13 +421,15 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               decoration: InputDecoration(
                 hintText: 'Mobile Number',
-                hintStyle: GoogleFonts.outfit(color: AppColors.lightGray.withOpacity(0.5)),
+                hintStyle: GoogleFonts.outfit(
+                    color: AppColors.lightGray.withOpacity(0.5)),
                 counterText: '',
                 filled: false,
                 border: InputBorder.none,
                 enabledBorder: InputBorder.none,
                 focusedBorder: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
               ),
             ),
           ),
@@ -489,13 +535,16 @@ class _LoginScreenState extends State<LoginScreen> {
             style: GoogleFonts.outfit(color: AppColors.white, fontSize: 15),
             decoration: InputDecoration(
               hintText: 'Email',
-              hintStyle: GoogleFonts.outfit(color: AppColors.lightGray.withOpacity(0.5)),
-              prefixIcon: const Icon(Icons.email_outlined, color: AppColors.primary, size: 22),
+              hintStyle: GoogleFonts.outfit(
+                  color: AppColors.lightGray.withOpacity(0.5)),
+              prefixIcon: const Icon(Icons.email_outlined,
+                  color: AppColors.primary, size: 22),
               filled: false,
               border: InputBorder.none,
               enabledBorder: InputBorder.none,
               focusedBorder: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
             ),
           ),
         ),
@@ -515,10 +564,13 @@ class _LoginScreenState extends State<LoginScreen> {
             style: GoogleFonts.outfit(color: AppColors.white, fontSize: 15),
             decoration: InputDecoration(
               hintText: 'Password',
-              hintStyle: GoogleFonts.outfit(color: AppColors.lightGray.withOpacity(0.5)),
-              prefixIcon: const Icon(Icons.lock_outline, color: AppColors.primary, size: 22),
+              hintStyle: GoogleFonts.outfit(
+                  color: AppColors.lightGray.withOpacity(0.5)),
+              prefixIcon: const Icon(Icons.lock_outline,
+                  color: AppColors.primary, size: 22),
               suffixIcon: GestureDetector(
-                onTap: () => setState(() => _obscurePassword = !_obscurePassword),
+                onTap: () =>
+                    setState(() => _obscurePassword = !_obscurePassword),
                 child: Icon(
                   _obscurePassword ? Icons.visibility_off : Icons.visibility,
                   color: AppColors.lightGray,
@@ -529,7 +581,8 @@ class _LoginScreenState extends State<LoginScreen> {
               border: InputBorder.none,
               enabledBorder: InputBorder.none,
               focusedBorder: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
             ),
           ),
         ),
@@ -547,12 +600,19 @@ class _LoginScreenState extends State<LoginScreen> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: AppColors.black,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16)),
                   elevation: 0,
                 ),
                 child: auth.isLoading
-                    ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.black))
-                    : Text('Login as Admin', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w700)),
+                    ? const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2.5, color: AppColors.black))
+                    : Text('Login as Admin',
+                        style: GoogleFonts.outfit(
+                            fontSize: 16, fontWeight: FontWeight.w700)),
               ),
             );
           },
@@ -570,7 +630,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: AppColors.error.withOpacity(0.3)),
                 ),
-                child: Text(auth.error!, style: GoogleFonts.outfit(color: AppColors.error, fontSize: 13)),
+                child: Text(auth.error!,
+                    style: GoogleFonts.outfit(
+                        color: AppColors.error, fontSize: 13)),
               );
             }
             return const SizedBox.shrink();
