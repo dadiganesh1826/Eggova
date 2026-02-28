@@ -57,10 +57,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final auth = Provider.of<AuthProvider>(context, listen: false);
     final success = await auth.updateProfile(
       name: name,
-      email: _emailController.text.trim().isEmpty ? null : _emailController.text.trim(),
+      email: _emailController.text.trim().isEmpty
+          ? null
+          : _emailController.text.trim(),
       district: _selectedDistrict,
-      address: _addressController.text.trim().isEmpty ? null : _addressController.text.trim(),
-      pincode: _pincodeController.text.trim().isEmpty ? null : _pincodeController.text.trim(),
+      address: _addressController.text.trim().isEmpty
+          ? null
+          : _addressController.text.trim(),
+      pincode: _pincodeController.text.trim().isEmpty
+          ? null
+          : _pincodeController.text.trim(),
     );
 
     setState(() => _isSaving = false);
@@ -114,7 +120,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 ),
                 child: Center(
                   child: Text(
-                    user?.name.isNotEmpty == true ? user!.name[0].toUpperCase() : '?',
+                    user?.name.isNotEmpty == true
+                        ? user!.name[0].toUpperCase()
+                        : '?',
                     style: GoogleFonts.outfit(
                       fontSize: 36,
                       fontWeight: FontWeight.w800,
@@ -176,20 +184,43 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 value: DistrictData.allDistricts.contains(_selectedDistrict)
                     ? _selectedDistrict
                     : null,
+                isExpanded: true,
                 dropdownColor: const Color(0xFF333333),
-                icon: const Icon(Icons.keyboard_arrow_down, color: AppColors.primary),
+                icon: const Icon(Icons.keyboard_arrow_down,
+                    color: AppColors.primary),
                 style: GoogleFonts.outfit(color: AppColors.white, fontSize: 15),
                 decoration: InputDecoration(
-                  prefixIcon: const Icon(Icons.location_on_outlined, color: AppColors.primary, size: 22),
+                  prefixIcon: const Icon(Icons.location_on_outlined,
+                      color: AppColors.primary, size: 22),
+                  filled: false,
                   border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
                   hintText: 'Select district',
-                  hintStyle: GoogleFonts.outfit(color: AppColors.lightGray.withOpacity(0.5)),
+                  hintStyle: GoogleFonts.outfit(
+                      color: AppColors.lightGray.withOpacity(0.5)),
                 ),
+                selectedItemBuilder: (context) {
+                  return DistrictData.dropdownItems.map((item) {
+                    return Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        item['label']!,
+                        style: GoogleFonts.outfit(
+                            color: AppColors.white, fontSize: 15),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    );
+                  }).toList();
+                },
                 items: DistrictData.dropdownItems.map((item) {
                   return DropdownMenuItem<String>(
                     value: item['district'],
-                    child: Text(item['label']!, style: GoogleFonts.outfit(color: AppColors.white, fontSize: 15)),
+                    child: Text(item['label']!,
+                        style: GoogleFonts.outfit(
+                            color: AppColors.white, fontSize: 15)),
                   );
                 }).toList(),
                 onChanged: (value) {
@@ -233,12 +264,19 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: AppColors.black,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16)),
                   elevation: 0,
                 ),
                 child: _isSaving
-                    ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2.5, color: AppColors.black))
-                    : Text('Save Changes', style: GoogleFonts.outfit(fontSize: 17, fontWeight: FontWeight.w700)),
+                    ? const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2.5, color: AppColors.black))
+                    : Text('Save Changes',
+                        style: GoogleFonts.outfit(
+                            fontSize: 17, fontWeight: FontWeight.w700)),
               ),
             ),
 
@@ -274,7 +312,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       style: GoogleFonts.outfit(color: AppColors.white, fontSize: 15),
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle: GoogleFonts.outfit(color: AppColors.lightGray.withOpacity(0.5)),
+        hintStyle:
+            GoogleFonts.outfit(color: AppColors.lightGray.withOpacity(0.5)),
         prefixIcon: Icon(icon, color: AppColors.primary, size: 22),
         filled: true,
         fillColor: AppColors.white.withOpacity(0.08),
@@ -290,7 +329,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           borderRadius: BorderRadius.circular(16),
           borderSide: const BorderSide(color: AppColors.primary, width: 2),
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
       ),
     );
   }
