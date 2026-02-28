@@ -100,6 +100,24 @@ router.post('/verify', auth, async (req, res) => {
             { orderId: order.id, type: 'payment_received' },
         );
 
+        // Notify User
+        await Notification.create({
+            userId: req.user.id,
+            title: 'Order Confirmed! 🥚✅',
+            message: `Payment successful! Your order for ${order.trayCount} tray(s) has been confirmed and placed.`,
+            type: 'order_update',
+            metadata: { orderId: order.id, trayCount: order.trayCount },
+        });
+
+        if (req.user.fcmToken) {
+            await sendPush(
+                req.user.fcmToken,
+                'Order Confirmed! 🥚✅',
+                `Payment successful for ${order.trayCount} tray(s). Your order is now confirmed!`,
+                { orderId: order.id, type: 'order_confirmed' },
+            );
+        }
+
         res.json({
             success: true,
             message: 'Payment verified and confirmed successfully',

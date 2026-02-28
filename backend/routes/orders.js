@@ -120,6 +120,25 @@ router.post('/place', auth, async (req, res) => {
                 `${req.user.name} ordered ${trayCount} tray(s) — ₹${totalAmount.toFixed(2)} (Pay Later)`,
                 { orderId: order.id, type: 'new_order_cash' },
             );
+
+            // Notify User
+            await Notification.create({
+                userId: req.user.id,
+                title: 'Order Placed Successfully! 🎉',
+                message: `Your order for ${trayCount} tray(s) has been placed. Please pay when eggs are delivered.`,
+                type: 'order_update',
+                metadata: { orderId: order.id, trayCount },
+            });
+
+            if (req.user.fcmToken) {
+                const { sendPush } = require('../services/push');
+                await sendPush(
+                    req.user.fcmToken,
+                    'Order Placed Successfully! 🎉',
+                    `Your order for ${trayCount} tray(s) has been placed. Thank you for choosing Eggova!`,
+                    { orderId: order.id, type: 'order_placed' },
+                );
+            }
         }
 
         res.status(201).json({
