@@ -43,21 +43,27 @@ class _UserDashboardState extends State<UserDashboard> {
   }
 
   void _onTrayTextChanged() {
-    final val = int.tryParse(_trayController.text);
+    final text = _trayController.text;
+    if (text.isEmpty) return; // Allow empty while typing
+
+    final val = int.tryParse(text);
     if (val != null && val != _trayCount) {
       final orderProvider = Provider.of<OrderProvider>(context, listen: false);
-      final maxAvailable = orderProvider.isStockSet ? orderProvider.availableTrays : 1000;
-      
+      final maxAvailable =
+          orderProvider.isStockSet ? orderProvider.availableTrays : 1000;
+
       if (val > maxAvailable) {
         setState(() {
           _trayCount = maxAvailable;
           _trayController.text = maxAvailable.toString();
-          _trayController.selection = TextSelection.fromPosition(TextPosition(offset: _trayController.text.length));
+          _trayController.selection = TextSelection.fromPosition(
+              TextPosition(offset: _trayController.text.length));
         });
         _showSnack('Only $maxAvailable trays available today');
       } else if (val < 1) {
-        // Don't force change while typing, but handle on blur if needed
-        // For now, just allow typing but maybe cap on order
+        setState(() {
+          _trayCount = 1;
+        });
       } else {
         setState(() {
           _trayCount = val;
@@ -67,11 +73,20 @@ class _UserDashboardState extends State<UserDashboard> {
   }
 
   void _updateTrayCount(int newCount) {
-    if (newCount < 1) return;
-    
+    if (newCount < 1) {
+      if (_trayCount != 1) {
+        setState(() {
+          _trayCount = 1;
+          _trayController.text = '1';
+        });
+      }
+      return;
+    }
+
     final orderProvider = Provider.of<OrderProvider>(context, listen: false);
-    final maxAvailable = orderProvider.isStockSet ? orderProvider.availableTrays : 1000;
-    
+    final maxAvailable =
+        orderProvider.isStockSet ? orderProvider.availableTrays : 1000;
+
     if (newCount > maxAvailable) {
       _showSnack('Maximum $maxAvailable trays available');
       newCount = maxAvailable;
@@ -80,14 +95,16 @@ class _UserDashboardState extends State<UserDashboard> {
     setState(() {
       _trayCount = newCount;
       _trayController.text = newCount.toString();
-      _trayController.selection = TextSelection.fromPosition(TextPosition(offset: _trayController.text.length));
+      _trayController.selection = TextSelection.fromPosition(
+          TextPosition(offset: _trayController.text.length));
     });
   }
 
   void _showSnack(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message, style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
+        content: Text(message,
+            style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
         backgroundColor: Colors.amber.shade700,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -110,7 +127,10 @@ class _UserDashboardState extends State<UserDashboard> {
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           boxShadow: [
-            BoxShadow(color: AppColors.black.withOpacity(0.1), blurRadius: 20, offset: const Offset(0, -5)),
+            BoxShadow(
+                color: AppColors.black.withOpacity(0.1),
+                blurRadius: 20,
+                offset: const Offset(0, -5)),
           ],
         ),
         child: ClipRRect(
@@ -123,8 +143,10 @@ class _UserDashboardState extends State<UserDashboard> {
             unselectedItemColor: AppColors.lightGray,
             items: const [
               BottomNavigationBarItem(icon: Icon(Icons.egg), label: 'Order'),
-              BottomNavigationBarItem(icon: Icon(Icons.history), label: 'History'),
-              BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
+              BottomNavigationBarItem(
+                  icon: Icon(Icons.history), label: 'History'),
+              BottomNavigationBarItem(
+                  icon: Icon(Icons.person), label: 'Profile'),
             ],
           ),
         ),
@@ -168,23 +190,31 @@ class _UserDashboardState extends State<UserDashboard> {
                               gradient: AppColors.primaryGradient,
                               shape: BoxShape.circle,
                             ),
-                            child: const Icon(Icons.egg, color: AppColors.black, size: 24),
+                            child: const Icon(Icons.egg,
+                                color: AppColors.black, size: 24),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('Hello, ${auth.user?.name?.split(' ').first ?? 'User'} 👋',
-                                    style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.white)),
+                                Text(
+                                    'Hello, ${auth.user?.name?.split(' ').first ?? 'User'} 👋',
+                                    style: GoogleFonts.outfit(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.white)),
                                 Text('Order fresh eggs today',
-                                    style: GoogleFonts.outfit(fontSize: 13, color: AppColors.lightGray)),
+                                    style: GoogleFonts.outfit(
+                                        fontSize: 13,
+                                        color: AppColors.lightGray)),
                               ],
                             ),
                           ),
                           IconButton(
                             onPressed: () {},
-                            icon: const Icon(Icons.notifications_outlined, color: AppColors.primary, size: 26),
+                            icon: const Icon(Icons.notifications_outlined,
+                                color: AppColors.primary, size: 26),
                           ),
                         ],
                       ),
@@ -203,100 +233,130 @@ class _UserDashboardState extends State<UserDashboard> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Live price card
-              _buildPriceCard().animate().fadeIn(duration: 500.ms).slideY(begin: 0.1, end: 0),
+                _buildPriceCard()
+                    .animate()
+                    .fadeIn(duration: 500.ms)
+                    .slideY(begin: 0.1, end: 0),
 
-              const SizedBox(height: 14),
+                const SizedBox(height: 14),
 
-              // Stock availability badge
-              Consumer<OrderProvider>(
-                builder: (context, provider, _) {
-                  if (!provider.isStockSet) {
+                // Stock availability badge
+                Consumer<OrderProvider>(
+                  builder: (context, provider, _) {
+                    if (!provider.isStockSet) {
+                      return Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(14),
+                          border:
+                              Border.all(color: Colors.amber.withOpacity(0.3)),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.info_outline,
+                                color: Colors.amber.shade700, size: 20),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                'Stock not set for today. Orders may be unavailable.',
+                                style: GoogleFonts.outfit(
+                                    fontSize: 13, color: Colors.amber.shade800),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ).animate().fadeIn(delay: 100.ms, duration: 400.ms);
+                    }
+                    final avail = provider.availableTrays;
+                    final isOut = avail <= 0;
                     return Container(
                       width: double.infinity,
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 12),
                       decoration: BoxDecoration(
-                        color: Colors.amber.withOpacity(0.1),
+                        color: isOut
+                            ? AppColors.error.withOpacity(0.08)
+                            : avail <= 50
+                                ? Colors.amber.withOpacity(0.1)
+                                : AppColors.success.withOpacity(0.08),
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: Colors.amber.withOpacity(0.3)),
+                        border: Border.all(
+                          color: isOut
+                              ? AppColors.error.withOpacity(0.3)
+                              : avail <= 50
+                                  ? Colors.amber.withOpacity(0.3)
+                                  : AppColors.success.withOpacity(0.2),
+                        ),
                       ),
                       child: Row(
                         children: [
-                          Icon(Icons.info_outline, color: Colors.amber.shade700, size: 20),
+                          Icon(
+                            isOut
+                                ? Icons.error_outline
+                                : Icons.inventory_2_outlined,
+                            color: isOut
+                                ? AppColors.error
+                                : avail <= 50
+                                    ? Colors.amber.shade700
+                                    : AppColors.success,
+                            size: 20,
+                          ),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
-                              'Stock not set for today. Orders may be unavailable.',
-                              style: GoogleFonts.outfit(fontSize: 13, color: Colors.amber.shade800),
+                              isOut
+                                  ? 'All stock for today has been sold out!'
+                                  : '$avail tray${avail == 1 ? '' : 's'} available today',
+                              style: GoogleFonts.outfit(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: isOut
+                                    ? AppColors.error
+                                    : avail <= 50
+                                        ? Colors.amber.shade800
+                                        : AppColors.success,
+                              ),
                             ),
                           ),
                         ],
                       ),
                     ).animate().fadeIn(delay: 100.ms, duration: 400.ms);
-                  }
-                  final avail = provider.availableTrays;
-                  final isOut = avail <= 0;
-                  return Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: isOut
-                          ? AppColors.error.withOpacity(0.08)
-                          : avail <= 50
-                              ? Colors.amber.withOpacity(0.1)
-                              : AppColors.success.withOpacity(0.08),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: isOut
-                            ? AppColors.error.withOpacity(0.3)
-                            : avail <= 50
-                                ? Colors.amber.withOpacity(0.3)
-                                : AppColors.success.withOpacity(0.2),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          isOut ? Icons.error_outline : Icons.inventory_2_outlined,
-                          color: isOut ? AppColors.error : avail <= 50 ? Colors.amber.shade700 : AppColors.success,
-                          size: 20,
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            isOut
-                                ? 'All stock for today has been sold out!'
-                                : '$avail tray${avail == 1 ? '' : 's'} available today',
-                            style: GoogleFonts.outfit(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: isOut ? AppColors.error : avail <= 50 ? Colors.amber.shade800 : AppColors.success,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ).animate().fadeIn(delay: 100.ms, duration: 400.ms);
-                },
-              ),
+                  },
+                ),
 
-              const SizedBox(height: 24),
+                const SizedBox(height: 24),
 
-              // Tray selector
-              Text('Select Egg Trays', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w700, color: AppColors.darkGray)),
-              const SizedBox(height: 4),
-              Text('Each tray contains 30 eggs', style: GoogleFonts.outfit(fontSize: 13, color: AppColors.gray)),
-              const SizedBox(height: 16),
-              _buildTraySelector().animate().fadeIn(delay: 200.ms, duration: 500.ms),
+                // Tray selector
+                Text('Select Egg Trays',
+                    style: GoogleFonts.outfit(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.darkGray)),
+                const SizedBox(height: 4),
+                Text('Each tray contains 30 eggs',
+                    style: GoogleFonts.outfit(
+                        fontSize: 13, color: AppColors.gray)),
+                const SizedBox(height: 16),
+                _buildTraySelector()
+                    .animate()
+                    .fadeIn(delay: 200.ms, duration: 500.ms),
 
                 const SizedBox(height: 24),
 
                 // Order summary
-                _buildOrderSummary().animate().fadeIn(delay: 400.ms, duration: 500.ms),
+                _buildOrderSummary()
+                    .animate()
+                    .fadeIn(delay: 400.ms, duration: 500.ms),
 
                 const SizedBox(height: 24),
 
                 // Checkout buttons
-                _buildCheckoutButtons().animate().fadeIn(delay: 600.ms, duration: 500.ms),
+                _buildCheckoutButtons()
+                    .animate()
+                    .fadeIn(delay: 600.ms, duration: 500.ms),
 
                 const SizedBox(height: 20),
               ],
@@ -318,7 +378,10 @@ class _UserDashboardState extends State<UserDashboard> {
             gradient: AppColors.primaryGradient,
             borderRadius: BorderRadius.circular(24),
             boxShadow: [
-              BoxShadow(color: AppColors.primary.withOpacity(0.3), blurRadius: 20, offset: const Offset(0, 8)),
+              BoxShadow(
+                  color: AppColors.primary.withOpacity(0.3),
+                  blurRadius: 20,
+                  offset: const Offset(0, 8)),
             ],
           ),
           child: Column(
@@ -327,7 +390,8 @@ class _UserDashboardState extends State<UserDashboard> {
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
                       color: AppColors.black.withOpacity(0.15),
                       borderRadius: BorderRadius.circular(20),
@@ -335,12 +399,23 @@ class _UserDashboardState extends State<UserDashboard> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(price?.isToday == true ? Icons.check_circle : Icons.warning_amber_rounded,
-                            size: 10, color: price?.isToday == true ? AppColors.success : AppColors.error),
+                        Icon(
+                            price?.isToday == true
+                                ? Icons.check_circle
+                                : Icons.warning_amber_rounded,
+                            size: 10,
+                            color: price?.isToday == true
+                                ? AppColors.success
+                                : AppColors.error),
                         const SizedBox(width: 6),
                         Text(
-                          price?.isToday == true ? "Today's Rate" : 'Price Pending',
-                          style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.darkGray),
+                          price?.isToday == true
+                              ? "Today's Rate"
+                              : 'Price Pending',
+                          style: GoogleFonts.outfit(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.darkGray),
                         ),
                       ],
                     ),
@@ -348,26 +423,43 @@ class _UserDashboardState extends State<UserDashboard> {
                   const Spacer(),
                   IconButton(
                     onPressed: () => provider.fetchCurrentPrice(),
-                    icon: const Icon(Icons.refresh, color: AppColors.black, size: 22),
+                    icon: const Icon(Icons.refresh,
+                        color: AppColors.black, size: 22),
                   ),
                 ],
               ),
               const SizedBox(height: 12),
               if (provider.isLoading)
-                const Center(child: CircularProgressIndicator(color: AppColors.black))
+                const Center(
+                    child: CircularProgressIndicator(color: AppColors.black))
               else if (price != null) ...[
                 Text(
-                  price.isToday == true ? _currencyFormat.format(price.pricePerTray) : "₹--",
-                  style: GoogleFonts.outfit(fontSize: 36, fontWeight: FontWeight.w900, color: AppColors.black),
+                  price.isToday == true
+                      ? _currencyFormat.format(price.pricePerTray)
+                      : "₹--",
+                  style: GoogleFonts.outfit(
+                      fontSize: 36,
+                      fontWeight: FontWeight.w900,
+                      color: AppColors.black),
                 ),
-                Text(price.isToday == true ? 'per tray (${price.district})' : 'Rate will be updated shortly',
-                    style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w500, color: AppColors.darkGray)),
+                Text(
+                    price.isToday == true
+                        ? 'per tray (${price.district})'
+                        : 'Rate will be updated shortly',
+                    style: GoogleFonts.outfit(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.darkGray)),
                 const SizedBox(height: 4),
                 if (price.isToday == true)
                   Text('₹${price.pricePerEgg.toStringAsFixed(2)} per egg',
-                      style: GoogleFonts.outfit(fontSize: 13, color: AppColors.darkGray.withOpacity(0.7))),
+                      style: GoogleFonts.outfit(
+                          fontSize: 13,
+                          color: AppColors.darkGray.withOpacity(0.7))),
               ] else
-                Text('No price available', style: GoogleFonts.outfit(fontSize: 16, color: AppColors.darkGray)),
+                Text('No price available',
+                    style: GoogleFonts.outfit(
+                        fontSize: 16, color: AppColors.darkGray)),
             ],
           ),
         );
@@ -381,7 +473,12 @@ class _UserDashboardState extends State<UserDashboard> {
       decoration: BoxDecoration(
         color: AppColors.white,
         borderRadius: BorderRadius.circular(24),
-        boxShadow: [BoxShadow(color: AppColors.black.withOpacity(0.05), blurRadius: 15, offset: const Offset(0, 5))],
+        boxShadow: [
+          BoxShadow(
+              color: AppColors.black.withOpacity(0.05),
+              blurRadius: 15,
+              offset: const Offset(0, 5))
+        ],
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -389,8 +486,14 @@ class _UserDashboardState extends State<UserDashboard> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Number of Trays', style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.darkGray)),
-              Text('${_trayCount * 30} eggs total', style: GoogleFonts.outfit(fontSize: 13, color: AppColors.gray)),
+              Text('Number of Trays',
+                  style: GoogleFonts.outfit(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.darkGray)),
+              Text('${_trayCount * 30} eggs total',
+                  style:
+                      GoogleFonts.outfit(fontSize: 13, color: AppColors.gray)),
             ],
           ),
           Container(
@@ -410,7 +513,10 @@ class _UserDashboardState extends State<UserDashboard> {
                     controller: _trayController,
                     keyboardType: TextInputType.number,
                     textAlign: TextAlign.center,
-                    style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.darkGray),
+                    style: GoogleFonts.outfit(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.darkGray),
                     decoration: const InputDecoration(
                       border: InputBorder.none,
                       isDense: true,
@@ -459,13 +565,22 @@ class _UserDashboardState extends State<UserDashboard> {
           decoration: BoxDecoration(
             color: AppColors.white,
             borderRadius: BorderRadius.circular(24),
-            boxShadow: [BoxShadow(color: AppColors.black.withOpacity(0.05), blurRadius: 15, offset: const Offset(0, 5))],
+            boxShadow: [
+              BoxShadow(
+                  color: AppColors.black.withOpacity(0.05),
+                  blurRadius: 15,
+                  offset: const Offset(0, 5))
+            ],
           ),
           child: Column(
             children: [
               _summaryRow('Trays', '$_trayCount'),
               const SizedBox(height: 12),
-              _summaryRow('Price per tray', price != null ? _currencyFormat.format(price.pricePerTray) : '-'),
+              _summaryRow(
+                  'Price per tray',
+                  price != null
+                      ? _currencyFormat.format(price.pricePerTray)
+                      : '-'),
               const SizedBox(height: 12),
               _summaryRow('Total eggs', '${_trayCount * 30}'),
               const Padding(
@@ -476,13 +591,20 @@ class _UserDashboardState extends State<UserDashboard> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Flexible(
-                    child: Text('Total Amount', style: GoogleFonts.outfit(fontSize: 17, fontWeight: FontWeight.w700, color: AppColors.darkGray)),
+                    child: Text('Total Amount',
+                        style: GoogleFonts.outfit(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.darkGray)),
                   ),
                   const SizedBox(width: 8),
                   Flexible(
                     child: Text(
                       _currencyFormat.format(total),
-                      style: GoogleFonts.outfit(fontSize: 24, fontWeight: FontWeight.w900, color: AppColors.primaryDark),
+                      style: GoogleFonts.outfit(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w900,
+                          color: AppColors.primaryDark),
                       textAlign: TextAlign.end,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -501,13 +623,17 @@ class _UserDashboardState extends State<UserDashboard> {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Flexible(
-          child: Text(label, style: GoogleFonts.outfit(fontSize: 14, color: AppColors.gray)),
+          child: Text(label,
+              style: GoogleFonts.outfit(fontSize: 14, color: AppColors.gray)),
         ),
         const SizedBox(width: 8),
         Flexible(
           child: Text(
             value,
-            style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.darkGray),
+            style: GoogleFonts.outfit(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: AppColors.darkGray),
             textAlign: TextAlign.end,
             overflow: TextOverflow.ellipsis,
           ),
@@ -520,8 +646,10 @@ class _UserDashboardState extends State<UserDashboard> {
     return Consumer<OrderProvider>(
       builder: (context, provider, _) {
         final bool isPriceMissing = provider.currentPrice?.isToday != true;
-        final bool isStockMissing = !provider.isStockSet || provider.availableTrays <= 0;
-        final bool isOrderDisabled = provider.isLoading || isPriceMissing || isStockMissing;
+        final bool isStockMissing =
+            !provider.isStockSet || provider.availableTrays <= 0;
+        final bool isOrderDisabled =
+            provider.isLoading || isPriceMissing || isStockMissing;
 
         String? statusMsg;
         if (!provider.isStockSet) {
@@ -537,7 +665,8 @@ class _UserDashboardState extends State<UserDashboard> {
             if (statusMsg != null)
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+                padding:
+                    const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
                 margin: const EdgeInsets.only(bottom: 16),
                 decoration: BoxDecoration(
                   color: AppColors.error.withOpacity(0.1),
@@ -546,12 +675,16 @@ class _UserDashboardState extends State<UserDashboard> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.info_outline, size: 18, color: AppColors.error),
+                    const Icon(Icons.info_outline,
+                        size: 18, color: AppColors.error),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
                         statusMsg,
-                        style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.error),
+                        style: GoogleFonts.outfit(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.error),
                       ),
                     ),
                   ],
@@ -583,14 +716,20 @@ class _UserDashboardState extends State<UserDashboard> {
               width: double.infinity,
               height: 56,
               child: OutlinedButton.icon(
-                onPressed: isOrderDisabled ? null : () => _placeOrder('pay_later'),
+                onPressed:
+                    isOrderDisabled ? null : () => _placeOrder('pay_later'),
                 icon: const Icon(Icons.schedule, size: 22),
                 label: Text('Pay Later',
                     style: GoogleFonts.outfit(
                         fontSize: 16, fontWeight: FontWeight.w700)),
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: isOrderDisabled ? AppColors.gray : AppColors.darkGray,
-                  side: BorderSide(color: isOrderDisabled ? AppColors.lightGray : AppColors.primary, width: 2),
+                  foregroundColor:
+                      isOrderDisabled ? AppColors.gray : AppColors.darkGray,
+                  side: BorderSide(
+                      color: isOrderDisabled
+                          ? AppColors.lightGray
+                          : AppColors.primary,
+                      width: 2),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16)),
                 ),
@@ -607,7 +746,7 @@ class _UserDashboardState extends State<UserDashboard> {
     final auth = Provider.of<AuthProvider>(context, listen: false);
 
     final order = await provider.placeOrder(
-      _trayCount, 
+      _trayCount,
       paymentMethod,
       userData: {
         'name': auth.user?.name,
@@ -620,14 +759,17 @@ class _UserDashboardState extends State<UserDashboard> {
       if (paymentMethod != 'upi') {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Order ${order.orderNumber} placed successfully! 🎉', style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
+            content: Text('Order ${order.orderNumber} placed successfully! 🎉',
+                style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
             backgroundColor: AppColors.success,
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
         );
         setState(() {
           _trayCount = 1;
+          _trayController.text = '1';
           _currentIndex = 1; // Switch to orders tab
         });
       } else {
@@ -636,6 +778,7 @@ class _UserDashboardState extends State<UserDashboard> {
         // On success → user sees confirmed order. On cancel → sees cancelled order + error snackbar.
         setState(() {
           _trayCount = 1;
+          _trayController.text = '1';
           _currentIndex = 1; // Switch to orders tab
         });
 
@@ -645,10 +788,12 @@ class _UserDashboardState extends State<UserDashboard> {
     } else if (provider.error != null && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(provider.error!, style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
+          content: Text(provider.error!,
+              style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
           backgroundColor: AppColors.error,
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
       provider.clearError();
@@ -660,7 +805,8 @@ class _UserDashboardState extends State<UserDashboard> {
     return Scaffold(
       backgroundColor: AppColors.offWhite,
       appBar: AppBar(
-        title: Text('Order History', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+        title: Text('Order History',
+            style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
         automaticallyImplyLeading: false,
         backgroundColor: AppColors.black,
         actions: [
@@ -671,14 +817,17 @@ class _UserDashboardState extends State<UserDashboard> {
                 _orderFilterDateRange = null;
               }),
               icon: const Icon(Icons.close, size: 14, color: AppColors.error),
-              label: Text('Clear', style: GoogleFonts.outfit(fontSize: 12, color: AppColors.error)),
+              label: Text('Clear',
+                  style:
+                      GoogleFonts.outfit(fontSize: 12, color: AppColors.error)),
             ),
         ],
       ),
       body: Consumer<OrderProvider>(
         builder: (context, provider, _) {
           if (provider.isLoading && provider.orders.isEmpty) {
-            return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+            return const Center(
+                child: CircularProgressIndicator(color: AppColors.primary));
           }
 
           // Apply filters
@@ -686,7 +835,8 @@ class _UserDashboardState extends State<UserDashboard> {
             // Payment mode filter
             if (_orderFilterMode == 'upi') {
               final via = (order.paidVia ?? order.paymentMethod).toLowerCase();
-              if (!via.contains('upi') && !via.contains('razorpay')) return false;
+              if (!via.contains('upi') && !via.contains('razorpay'))
+                return false;
             } else if (_orderFilterMode == 'cash') {
               final via = (order.paidVia ?? order.paymentMethod).toLowerCase();
               if (!via.contains('cash')) return false;
@@ -697,7 +847,9 @@ class _UserDashboardState extends State<UserDashboard> {
             if (_orderFilterDateRange != null) {
               final date = order.createdAt;
               if (date.isBefore(_orderFilterDateRange!.start) ||
-                  date.isAfter(_orderFilterDateRange!.end.add(const Duration(days: 1)))) return false;
+                  date.isAfter(
+                      _orderFilterDateRange!.end.add(const Duration(days: 1))))
+                return false;
             }
             return true;
           }).toList();
@@ -710,39 +862,65 @@ class _UserDashboardState extends State<UserDashboard> {
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [AppColors.darkGray, AppColors.black.withOpacity(0.85)],
+                    colors: [
+                      AppColors.darkGray,
+                      AppColors.black.withOpacity(0.85)
+                    ],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
                   borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: AppColors.primary.withOpacity(0.15), width: 1),
-                  boxShadow: [BoxShadow(color: AppColors.black.withOpacity(0.15), blurRadius: 12, offset: const Offset(0, 4))],
+                  border: Border.all(
+                      color: AppColors.primary.withOpacity(0.15), width: 1),
+                  boxShadow: [
+                    BoxShadow(
+                        color: AppColors.black.withOpacity(0.15),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4))
+                  ],
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       children: [
-                        Icon(Icons.tune_rounded, size: 14, color: AppColors.primary),
+                        Icon(Icons.tune_rounded,
+                            size: 14, color: AppColors.primary),
                         const SizedBox(width: 6),
-                        Text('Filter Orders', style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.primary, letterSpacing: 0.5)),
+                        Text('Filter Orders',
+                            style: GoogleFonts.outfit(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.primary,
+                                letterSpacing: 0.5)),
                         const Spacer(),
-                        if (_orderFilterMode != 'all' || _orderFilterDateRange != null)
+                        if (_orderFilterMode != 'all' ||
+                            _orderFilterDateRange != null)
                           GestureDetector(
-                            onTap: () => setState(() { _orderFilterMode = 'all'; _orderFilterDateRange = null; }),
+                            onTap: () => setState(() {
+                              _orderFilterMode = 'all';
+                              _orderFilterDateRange = null;
+                            }),
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 3),
                               decoration: BoxDecoration(
                                 color: AppColors.error.withOpacity(0.15),
                                 borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: AppColors.error.withOpacity(0.3)),
+                                border: Border.all(
+                                    color: AppColors.error.withOpacity(0.3)),
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(Icons.close, size: 11, color: AppColors.error),
+                                  Icon(Icons.close,
+                                      size: 11, color: AppColors.error),
                                   const SizedBox(width: 4),
-                                  Text('Clear', style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w600, color: AppColors.error)),
+                                  Text('Clear',
+                                      style: GoogleFonts.outfit(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppColors.error)),
                                 ],
                               ),
                             ),
@@ -754,13 +932,17 @@ class _UserDashboardState extends State<UserDashboard> {
                       scrollDirection: Axis.horizontal,
                       child: Row(
                         children: [
-                          _filterChip('All', 'all', _orderFilterMode, (v) => setState(() => _orderFilterMode = v)),
+                          _filterChip('All', 'all', _orderFilterMode,
+                              (v) => setState(() => _orderFilterMode = v)),
                           const SizedBox(width: 8),
-                          _filterChip('UPI', 'upi', _orderFilterMode, (v) => setState(() => _orderFilterMode = v)),
+                          _filterChip('UPI', 'upi', _orderFilterMode,
+                              (v) => setState(() => _orderFilterMode = v)),
                           const SizedBox(width: 8),
-                          _filterChip('Cash', 'cash', _orderFilterMode, (v) => setState(() => _orderFilterMode = v)),
+                          _filterChip('Cash', 'cash', _orderFilterMode,
+                              (v) => setState(() => _orderFilterMode = v)),
                           const SizedBox(width: 8),
-                          _filterChip('Pending', 'pending', _orderFilterMode, (v) => setState(() => _orderFilterMode = v)),
+                          _filterChip('Pending', 'pending', _orderFilterMode,
+                              (v) => setState(() => _orderFilterMode = v)),
                           const SizedBox(width: 12),
                           // Date range picker
                           GestureDetector(
@@ -772,37 +954,58 @@ class _UserDashboardState extends State<UserDashboard> {
                                 initialDateRange: _orderFilterDateRange,
                                 builder: (context, child) => Theme(
                                   data: ThemeData.dark().copyWith(
-                                    colorScheme: const ColorScheme.dark(primary: AppColors.primary, onPrimary: AppColors.black, surface: AppColors.darkGray),
+                                    colorScheme: const ColorScheme.dark(
+                                        primary: AppColors.primary,
+                                        onPrimary: AppColors.black,
+                                        surface: AppColors.darkGray),
                                   ),
                                   child: child!,
                                 ),
                               );
-                              if (range != null) setState(() => _orderFilterDateRange = range);
+                              if (range != null)
+                                setState(() => _orderFilterDateRange = range);
                             },
                             child: AnimatedContainer(
                               duration: const Duration(milliseconds: 200),
-                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 14, vertical: 7),
                               decoration: BoxDecoration(
-                                color: _orderFilterDateRange != null ? AppColors.primary : Colors.transparent,
+                                color: _orderFilterDateRange != null
+                                    ? AppColors.primary
+                                    : Colors.transparent,
                                 borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: _orderFilterDateRange != null ? AppColors.primary : AppColors.gray.withOpacity(0.5)),
+                                border: Border.all(
+                                    color: _orderFilterDateRange != null
+                                        ? AppColors.primary
+                                        : AppColors.gray.withOpacity(0.5)),
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(Icons.date_range_rounded, size: 14, color: _orderFilterDateRange != null ? AppColors.black : AppColors.lightGray),
+                                  Icon(Icons.date_range_rounded,
+                                      size: 14,
+                                      color: _orderFilterDateRange != null
+                                          ? AppColors.black
+                                          : AppColors.lightGray),
                                   const SizedBox(width: 6),
                                   Text(
                                     _orderFilterDateRange != null
                                         ? '${DateFormat('dd MMM').format(_orderFilterDateRange!.start)} – ${DateFormat('dd MMM').format(_orderFilterDateRange!.end)}'
                                         : 'Date Range',
-                                    style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w600, color: _orderFilterDateRange != null ? AppColors.black : AppColors.lightGray),
+                                    style: GoogleFonts.outfit(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: _orderFilterDateRange != null
+                                            ? AppColors.black
+                                            : AppColors.lightGray),
                                   ),
                                   if (_orderFilterDateRange != null) ...[
                                     const SizedBox(width: 6),
                                     GestureDetector(
-                                      onTap: () => setState(() => _orderFilterDateRange = null),
-                                      child: Icon(Icons.close, size: 13, color: AppColors.black),
+                                      onTap: () => setState(
+                                          () => _orderFilterDateRange = null),
+                                      child: Icon(Icons.close,
+                                          size: 13, color: AppColors.black),
                                     ),
                                   ],
                                 ],
@@ -823,16 +1026,24 @@ class _UserDashboardState extends State<UserDashboard> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.filter_list_off, size: 64, color: AppColors.lightGray),
+                            Icon(Icons.filter_list_off,
+                                size: 64, color: AppColors.lightGray),
                             const SizedBox(height: 12),
-                            Text('No orders match the filter', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.gray)),
+                            Text('No orders match the filter',
+                                style: GoogleFonts.outfit(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.gray)),
                             const SizedBox(height: 6),
                             TextButton(
                               onPressed: () => setState(() {
                                 _orderFilterMode = 'all';
                                 _orderFilterDateRange = null;
                               }),
-                              child: Text('Clear filters', style: GoogleFonts.outfit(color: AppColors.primary, fontWeight: FontWeight.w600)),
+                              child: Text('Clear filters',
+                                  style: GoogleFonts.outfit(
+                                      color: AppColors.primary,
+                                      fontWeight: FontWeight.w600)),
                             ),
                           ],
                         ),
@@ -845,7 +1056,10 @@ class _UserDashboardState extends State<UserDashboard> {
                           itemCount: filtered.length,
                           itemBuilder: (context, index) {
                             final order = filtered[index];
-                            return _buildOrderCard(order, provider).animate().fadeIn(delay: (index * 80).ms, duration: 400.ms);
+                            return _buildOrderCard(order, provider)
+                                .animate()
+                                .fadeIn(
+                                    delay: (index * 80).ms, duration: 400.ms);
                           },
                         ),
                       ),
@@ -857,7 +1071,8 @@ class _UserDashboardState extends State<UserDashboard> {
     );
   }
 
-  Widget _filterChip(String label, String value, String currentValue, ValueChanged<String> onTap) {
+  Widget _filterChip(String label, String value, String currentValue,
+      ValueChanged<String> onTap) {
     final isSelected = value == currentValue;
     return GestureDetector(
       onTap: () => onTap(value),
@@ -868,7 +1083,9 @@ class _UserDashboardState extends State<UserDashboard> {
           color: isSelected ? AppColors.primary : AppColors.darkGray,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: isSelected ? AppColors.primary : AppColors.gray.withOpacity(0.4),
+            color: isSelected
+                ? AppColors.primary
+                : AppColors.gray.withOpacity(0.4),
           ),
         ),
         child: Text(
@@ -906,7 +1123,12 @@ class _UserDashboardState extends State<UserDashboard> {
       decoration: BoxDecoration(
         color: AppColors.white,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(color: AppColors.black.withOpacity(0.04), blurRadius: 12, offset: const Offset(0, 4))],
+        boxShadow: [
+          BoxShadow(
+              color: AppColors.black.withOpacity(0.04),
+              blurRadius: 12,
+              offset: const Offset(0, 4))
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -917,20 +1139,30 @@ class _UserDashboardState extends State<UserDashboard> {
               Flexible(
                 child: Text(
                   order.orderNumber,
-                  style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.darkGray),
+                  style: GoogleFonts.outfit(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.darkGray),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
               const SizedBox(width: 8),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(color: statusColor.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20)),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(statusIcon, size: 14, color: statusColor),
                     const SizedBox(width: 4),
-                    Text(order.statusLabel, style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w600, color: statusColor)),
+                    Text(order.statusLabel,
+                        style: GoogleFonts.outfit(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: statusColor)),
                   ],
                 ),
               ),
@@ -941,7 +1173,8 @@ class _UserDashboardState extends State<UserDashboard> {
             children: [
               _orderDetail(Icons.egg, '${order.trayCount} Trays'),
               const SizedBox(width: 24),
-              _orderDetail(Icons.calendar_today, DateFormat('dd MMM yyyy').format(order.createdAt)),
+              _orderDetail(Icons.calendar_today,
+                  DateFormat('dd MMM yyyy').format(order.createdAt)),
             ],
           ),
           if (order.paymentStatus == 'completed') ...[
@@ -950,7 +1183,11 @@ class _UserDashboardState extends State<UserDashboard> {
               children: [
                 Icon(Icons.payments_outlined, size: 14, color: AppColors.gray),
                 const SizedBox(width: 6),
-                Text(order.paymentMethodLabel, style: GoogleFonts.outfit(fontSize: 12, color: AppColors.gray, fontWeight: FontWeight.w500)),
+                Text(order.paymentMethodLabel,
+                    style: GoogleFonts.outfit(
+                        fontSize: 12,
+                        color: AppColors.gray,
+                        fontWeight: FontWeight.w500)),
               ],
             ),
           ],
@@ -961,7 +1198,10 @@ class _UserDashboardState extends State<UserDashboard> {
               Flexible(
                 child: Text(
                   _currencyFormat.format(order.totalAmount),
-                  style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w800, color: AppColors.primaryDark),
+                  style: GoogleFonts.outfit(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.primaryDark),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -969,8 +1209,11 @@ class _UserDashboardState extends State<UserDashboard> {
                 TextButton.icon(
                   onPressed: () => _showPaymentClaimDialog(order, provider),
                   icon: const Icon(Icons.check_circle_outline, size: 18),
-                  label: Text("I've Paid", style: GoogleFonts.outfit(fontWeight: FontWeight.w600, fontSize: 13)),
-                  style: TextButton.styleFrom(foregroundColor: AppColors.success),
+                  label: Text("I've Paid",
+                      style: GoogleFonts.outfit(
+                          fontWeight: FontWeight.w600, fontSize: 13)),
+                  style:
+                      TextButton.styleFrom(foregroundColor: AppColors.success),
                 ),
             ],
           ),
@@ -984,7 +1227,8 @@ class _UserDashboardState extends State<UserDashboard> {
       children: [
         Icon(icon, size: 16, color: AppColors.gray),
         const SizedBox(width: 6),
-        Text(text, style: GoogleFonts.outfit(fontSize: 13, color: AppColors.gray)),
+        Text(text,
+            style: GoogleFonts.outfit(fontSize: 13, color: AppColors.gray)),
       ],
     );
   }
@@ -999,11 +1243,13 @@ class _UserDashboardState extends State<UserDashboard> {
     if (provider.error != null && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(provider.error!, style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
+          content: Text(provider.error!,
+              style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
           backgroundColor: AppColors.error,
           duration: const Duration(seconds: 4),
           behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
       );
       provider.clearError();
@@ -1014,26 +1260,40 @@ class _UserDashboardState extends State<UserDashboard> {
     showModalBottomSheet(
       context: context,
       backgroundColor: AppColors.white,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (context) => Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(width: 40, height: 4, decoration: BoxDecoration(color: AppColors.lightGray, borderRadius: BorderRadius.circular(2))),
+            Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                    color: AppColors.lightGray,
+                    borderRadius: BorderRadius.circular(2))),
             const SizedBox(height: 20),
-            Text('Confirm Payment', style: GoogleFonts.outfit(fontSize: 20, fontWeight: FontWeight.w700)),
+            Text('Confirm Payment',
+                style: GoogleFonts.outfit(
+                    fontSize: 20, fontWeight: FontWeight.w700)),
             const SizedBox(height: 8),
-            Text('How did you pay for ${order.orderNumber}?', style: GoogleFonts.outfit(color: AppColors.gray)),
+            Text('How did you pay for ${order.orderNumber}?',
+                style: GoogleFonts.outfit(color: AppColors.gray)),
             const SizedBox(height: 24),
             _paymentOptionTile('Cash', Icons.money, () async {
               Navigator.pop(context);
               await provider.requestPaymentCompletion(order.id, 'cash');
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Payment request sent to admin!', style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
-                    backgroundColor: AppColors.success, behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                  SnackBar(
+                      content: Text('Payment request sent to admin!',
+                          style:
+                              GoogleFonts.outfit(fontWeight: FontWeight.w600)),
+                      backgroundColor: AppColors.success,
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12))),
                 );
               }
             }),
@@ -1043,9 +1303,14 @@ class _UserDashboardState extends State<UserDashboard> {
               await provider.requestPaymentCompletion(order.id, 'upi_direct');
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Payment request sent to admin!', style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
-                    backgroundColor: AppColors.success, behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                  SnackBar(
+                      content: Text('Payment request sent to admin!',
+                          style:
+                              GoogleFonts.outfit(fontWeight: FontWeight.w600)),
+                      backgroundColor: AppColors.success,
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12))),
                 );
               }
             }),
@@ -1070,14 +1335,22 @@ class _UserDashboardState extends State<UserDashboard> {
         child: Row(
           children: [
             Container(
-              width: 44, height: 44,
-              decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.2), borderRadius: BorderRadius.circular(12)),
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12)),
               child: Icon(icon, color: AppColors.primaryDark),
             ),
             const SizedBox(width: 16),
-            Text(label, style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.darkGray)),
+            Text(label,
+                style: GoogleFonts.outfit(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.darkGray)),
             const Spacer(),
-            const Icon(Icons.arrow_forward_ios, size: 16, color: AppColors.gray),
+            const Icon(Icons.arrow_forward_ios,
+                size: 16, color: AppColors.gray),
           ],
         ),
       ),
@@ -1092,7 +1365,8 @@ class _UserDashboardState extends State<UserDashboard> {
     return Scaffold(
       backgroundColor: AppColors.offWhite,
       appBar: AppBar(
-        title: Text('Profile', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+        title: Text('Profile',
+            style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
         automaticallyImplyLeading: false,
         backgroundColor: AppColors.black,
       ),
@@ -1107,22 +1381,35 @@ class _UserDashboardState extends State<UserDashboard> {
               decoration: BoxDecoration(
                 gradient: AppColors.primaryGradient,
                 shape: BoxShape.circle,
-                boxShadow: [BoxShadow(color: AppColors.primary.withOpacity(0.3), blurRadius: 15)],
+                boxShadow: [
+                  BoxShadow(
+                      color: AppColors.primary.withOpacity(0.3), blurRadius: 15)
+                ],
               ),
               child: Center(
                 child: Text(
-                  user?.name.isNotEmpty == true ? user!.name[0].toUpperCase() : 'U',
-                  style: GoogleFonts.outfit(fontSize: 36, fontWeight: FontWeight.w800, color: AppColors.black),
+                  user?.name.isNotEmpty == true
+                      ? user!.name[0].toUpperCase()
+                      : 'U',
+                  style: GoogleFonts.outfit(
+                      fontSize: 36,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.black),
                 ),
               ),
             ),
             const SizedBox(height: 16),
-            Text(user?.name ?? '', style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w700, color: AppColors.darkGray)),
-            Text(user?.district ?? '', style: GoogleFonts.outfit(fontSize: 14, color: AppColors.gray)),
+            Text(user?.name ?? '',
+                style: GoogleFonts.outfit(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.darkGray)),
+            Text(user?.district ?? '',
+                style: GoogleFonts.outfit(fontSize: 14, color: AppColors.gray)),
             const SizedBox(height: 28),
 
             _profileInfoCard(user),
- 
+
             const SizedBox(height: 20),
 
             // Edit Profile
@@ -1135,11 +1422,14 @@ class _UserDashboardState extends State<UserDashboard> {
                   if (mounted) setState(() {});
                 },
                 icon: const Icon(Icons.edit_outlined, size: 20),
-                label: Text('Edit Profile', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w600)),
+                label: Text('Edit Profile',
+                    style: GoogleFonts.outfit(
+                        fontSize: 16, fontWeight: FontWeight.w600)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: AppColors.black,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16)),
                   elevation: 0,
                 ),
               ),
@@ -1154,14 +1444,18 @@ class _UserDashboardState extends State<UserDashboard> {
               child: OutlinedButton.icon(
                 onPressed: () async {
                   await auth.logout();
-                  if (mounted) Navigator.pushReplacementNamed(context, '/login');
+                  if (mounted)
+                    Navigator.pushReplacementNamed(context, '/login');
                 },
                 icon: const Icon(Icons.logout, size: 20),
-                label: Text('Logout', style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w600)),
+                label: Text('Logout',
+                    style: GoogleFonts.outfit(
+                        fontSize: 16, fontWeight: FontWeight.w600)),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.error,
                   side: const BorderSide(color: AppColors.error, width: 1.5),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16)),
                 ),
               ),
             ),
@@ -1177,7 +1471,9 @@ class _UserDashboardState extends State<UserDashboard> {
       decoration: BoxDecoration(
         color: AppColors.white,
         borderRadius: BorderRadius.circular(20),
-        boxShadow: [BoxShadow(color: AppColors.black.withOpacity(0.04), blurRadius: 12)],
+        boxShadow: [
+          BoxShadow(color: AppColors.black.withOpacity(0.04), blurRadius: 12)
+        ],
       ),
       child: Column(
         children: [
@@ -1185,9 +1481,11 @@ class _UserDashboardState extends State<UserDashboard> {
           const Divider(height: 24),
           _profileRow(Icons.phone_outlined, 'Phone', user?.phone ?? ''),
           const Divider(height: 24),
-          _profileRow(Icons.home_outlined, 'Address', user?.address ?? 'Not set'),
+          _profileRow(
+              Icons.home_outlined, 'Address', user?.address ?? 'Not set'),
           const Divider(height: 24),
-          _profileRow(Icons.location_on_outlined, 'District', user?.district ?? ''),
+          _profileRow(
+              Icons.location_on_outlined, 'District', user?.district ?? ''),
           if (user?.pincode != null && user.pincode.isNotEmpty) ...[
             const Divider(height: 24),
             _profileRow(Icons.pin_drop_outlined, 'Pincode', user.pincode),
@@ -1201,8 +1499,11 @@ class _UserDashboardState extends State<UserDashboard> {
     return Row(
       children: [
         Container(
-          width: 40, height: 40,
-          decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+              color: AppColors.primary.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(10)),
           child: Icon(icon, color: AppColors.primaryDark, size: 20),
         ),
         const SizedBox(width: 14),
@@ -1210,8 +1511,14 @@ class _UserDashboardState extends State<UserDashboard> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label, style: GoogleFonts.outfit(fontSize: 12, color: AppColors.gray)),
-              Text(value, style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w500, color: AppColors.darkGray)),
+              Text(label,
+                  style:
+                      GoogleFonts.outfit(fontSize: 12, color: AppColors.gray)),
+              Text(value,
+                  style: GoogleFonts.outfit(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.darkGray)),
             ],
           ),
         ),
