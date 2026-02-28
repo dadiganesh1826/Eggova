@@ -25,6 +25,12 @@ class _SplashScreenState extends State<SplashScreen> {
 
     final auth = Provider.of<AuthProvider>(context, listen: false);
 
+    // Wait for the AuthProvider to finish loading from SharedPreferences
+    while (!auth.isInitialized) {
+      await Future.delayed(const Duration(milliseconds: 100));
+      if (!mounted) return;
+    }
+
     if (auth.isAuthenticated) {
       if (auth.isAdmin) {
         Navigator.pushReplacementNamed(context, '/admin-dashboard');
@@ -76,10 +82,11 @@ class _SplashScreenState extends State<SplashScreen> {
                 size: 64,
                 color: AppColors.black,
               ),
-            )
-                .animate()
-                .fadeIn(duration: 800.ms)
-                .scale(begin: const Offset(0.5, 0.5), end: const Offset(1, 1), duration: 800.ms, curve: Curves.elasticOut),
+            ).animate().fadeIn(duration: 800.ms).scale(
+                begin: const Offset(0.5, 0.5),
+                end: const Offset(1, 1),
+                duration: 800.ms,
+                curve: Curves.elasticOut),
 
             const SizedBox(height: 32),
 
@@ -107,9 +114,7 @@ class _SplashScreenState extends State<SplashScreen> {
                 color: AppColors.primaryLight,
                 letterSpacing: 2,
               ),
-            )
-                .animate()
-                .fadeIn(delay: 800.ms, duration: 600.ms),
+            ).animate().fadeIn(delay: 800.ms, duration: 600.ms),
 
             const SizedBox(height: 60),
 
@@ -121,9 +126,7 @@ class _SplashScreenState extends State<SplashScreen> {
                 valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
                 strokeWidth: 3,
               ),
-            )
-                .animate()
-                .fadeIn(delay: 1200.ms, duration: 400.ms),
+            ).animate().fadeIn(delay: 1200.ms, duration: 400.ms),
           ],
         ),
       ),

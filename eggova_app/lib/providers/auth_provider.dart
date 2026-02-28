@@ -10,11 +10,13 @@ class AuthProvider extends ChangeNotifier {
   UserModel? _user;
   String? _token;
   bool _isLoading = false;
+  bool _isInitialized = false;
   String? _error;
 
   UserModel? get user => _user;
   String? get token => _token;
   bool get isLoading => _isLoading;
+  bool get isInitialized => _isInitialized;
   String? get error => _error;
   bool get isAuthenticated => _token != null && _user != null;
   bool get isAdmin => _user?.isAdmin ?? false;
@@ -41,7 +43,8 @@ class AuthProvider extends ChangeNotifier {
           final response = await _api.getProfile();
           if (response.data['success']) {
             _user = UserModel.fromJson(response.data['data']['user']);
-            await prefs.setString(AppConstants.userKey, jsonEncode(_user!.toJson()));
+            await prefs.setString(
+                AppConstants.userKey, jsonEncode(_user!.toJson()));
           }
         } catch (_) {
           // Use cached data if server is unavailable
@@ -54,6 +57,7 @@ class AuthProvider extends ChangeNotifier {
     }
 
     _isLoading = false;
+    _isInitialized = true;
     notifyListeners();
   }
 
@@ -89,7 +93,8 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final response = await _api.verifyOtp(phone, otp, name: name, district: district);
+      final response =
+          await _api.verifyOtp(phone, otp, name: name, district: district);
       if (response.data['success']) {
         final data = response.data['data'];
         if (data['token'] != null) {
