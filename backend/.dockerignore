@@ -1,0 +1,9 @@
+node_modules
+.env
+.env.production
+eggova.sqlite
+startup.log
+*.log
+.git
+.gitignore
+README.md

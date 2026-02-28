@@ -1,0 +1,82 @@
+version: '3.9'
+
+services:
+  # ── PostgreSQL Database ────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: eggova_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - eggova_net
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Node.js Backend ────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: eggova_backend
+    restart: always
+    env_file:
+      - ./backend/.env.production
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - eggova_net
+    expose:
+      - "3000"
+    volumes:
+      # Mount firebase service account (never commit this file!)
+      - ./backend/firebase-service-account.json:/app/firebase-service-account.json:ro
+
+  # ── Nginx Reverse Proxy + SSL ──────────────────────────────────────────────
+  nginx:
+    image: nginx:alpine
+    container_name: eggova_nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - certbot_certs:/etc/letsencrypt:ro
+      - certbot_webroot:/var/www/certbot:ro
+    depends_on:
+      - backend
+    networks:
+      - eggova_net
+
+  # ── Certbot (free SSL via Let's Encrypt) ───────────────────────────────────
+  certbot:
+    image: certbot/certbot:latest
+    container_name: eggova_certbot
+    volumes:
+      - certbot_certs:/etc/letsencrypt
+      - certbot_webroot:/var/www/certbot
+    # Run manually: docker compose run certbot certonly ...
+    entrypoint: /bin/sh -c "trap exit TERM; while :; do sleep 12h & wait $${!}; certbot renew; done"
+
+volumes:
+  postgres_data:
+  certbot_certs:
+  certbot_webroot:
+
+
+networks:
+  eggova_net:
+    driver: bridge

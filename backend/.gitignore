@@ -1,3 +1,7 @@
 node_modules/
 .env
+.env.production
 *.log
+*.sqlite
+firebase-service-account.json
+eggova-app-firebase-adminsdk-*.json
