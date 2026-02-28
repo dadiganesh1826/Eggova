@@ -41,7 +41,8 @@ class OrderModel {
     this.user,
   });
 
-  bool get isPending => paymentStatus == 'pending' || paymentStatus == 'approval_pending';
+  bool get isPending =>
+      paymentStatus == 'pending' || paymentStatus == 'approval_pending';
   bool get isCompleted => paymentStatus == 'completed';
   bool get isApprovalPending => paymentStatus == 'approval_pending';
 
@@ -71,6 +72,13 @@ class OrderModel {
     }
   }
 
+  static double _parseDouble(dynamic value) {
+    if (value == null) return 0.0;
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? 0.0;
+    return 0.0;
+  }
+
   factory OrderModel.fromJson(Map<String, dynamic> json) {
     return OrderModel(
       id: json['id'] ?? '',
@@ -80,18 +88,23 @@ class OrderModel {
       customerPhone: json['customerPhone'] ?? json['customer_phone'],
       isOffline: json['isOffline'] ?? json['is_offline'] ?? false,
       trayCount: json['trayCount'] ?? json['tray_count'] ?? 0,
-      pricePerTray: (json['pricePerTray'] ?? json['price_per_tray'] ?? 0).toDouble(),
-      totalAmount: (json['totalAmount'] ?? json['total_amount'] ?? 0).toDouble(),
+      pricePerTray:
+          _parseDouble(json['pricePerTray'] ?? json['price_per_tray']),
+      totalAmount: _parseDouble(json['totalAmount'] ?? json['total_amount']),
       paymentMethod: json['paymentMethod'] ?? json['payment_method'] ?? '',
-      paymentStatus: json['paymentStatus'] ?? json['payment_status'] ?? 'pending',
+      paymentStatus:
+          json['paymentStatus'] ?? json['payment_status'] ?? 'pending',
       orderStatus: json['orderStatus'] ?? json['order_status'] ?? 'placed',
       razorpayOrderId: json['razorpayOrderId'] ?? json['razorpay_order_id'],
-      razorpayPaymentId: json['razorpayPaymentId'] ?? json['razorpay_payment_id'],
+      razorpayPaymentId:
+          json['razorpayPaymentId'] ?? json['razorpay_payment_id'],
       paidAt: json['paidAt'] != null
           ? DateTime.parse(json['paidAt'])
           : (json['paid_at'] != null ? DateTime.parse(json['paid_at']) : null),
       paidVia: json['paidVia'] ?? json['paid_via'],
-      createdAt: DateTime.parse(json['createdAt'] ?? json['created_at'] ?? DateTime.now().toIso8601String()),
+      createdAt: DateTime.parse(json['createdAt'] ??
+          json['created_at'] ??
+          DateTime.now().toIso8601String()),
       user: json['user'] != null ? UserModel.fromJson(json['user']) : null,
     );
   }
