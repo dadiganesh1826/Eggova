@@ -35,6 +35,11 @@ function initScheduler() {
                 const dailyData = scrapedRates[district];
                 if (dailyData) {
                     for (const [day, pricePerEgg] of Object.entries(dailyData)) {
+                        // Validate the date (skip Feb 30th/31st)
+                        const parsedDay = parseInt(day);
+                        const testDate = new Date(currentYear, currentMonth, parsedDay);
+                        if (testDate.getMonth() !== currentMonth) continue;
+
                         const dateStr = `${currentYear}-${(currentMonth + 1).toString().padStart(2, '0')}-${day.padStart(2, '0')}`;
                         const pricePerTray = Math.round(pricePerEgg * 30);
 
