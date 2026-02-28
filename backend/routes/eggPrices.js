@@ -154,6 +154,13 @@ router.post('/auto-fetch', auth, adminOnly, async (req, res) => {
             if (dailyData) {
                 let districtUpdateCount = 0;
                 for (const [day, pricePerEgg] of Object.entries(dailyData)) {
+                    // Validate the date (e.g., skip Feb 30th or 31st if the scraper returns trailing data)
+                    const parsedDay = parseInt(day);
+                    const testDate = new Date(currentYear, currentMonth, parsedDay);
+                    if (testDate.getMonth() !== currentMonth) {
+                        continue; // Invalid date for this month
+                    }
+
                     // Construct YYYY-MM-DD
                     const dateStr = `${currentYear}-${(currentMonth + 1).toString().padStart(2, '0')}-${day.padStart(2, '0')}`;
                     const pricePerTray = Math.round(pricePerEgg * 30);
