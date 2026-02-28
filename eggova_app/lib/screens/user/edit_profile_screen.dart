@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../config/theme.dart';
 import '../../config/district_data.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/order_provider.dart';
 
 class EditProfileScreen extends StatefulWidget {
   const EditProfileScreen({super.key});
@@ -75,6 +76,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     setState(() => _isSaving = false);
 
     if (success && mounted) {
+      // Refresh egg prices immediately for the new district
+      Provider.of<OrderProvider>(context, listen: false)
+          .fetchCurrentPrice(district: _selectedDistrict);
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Profile updated! ✅', style: GoogleFonts.outfit()),
