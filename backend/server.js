@@ -48,6 +48,35 @@ async function start() {
     await sequelize.sync();
     console.log('✅ Models synchronized');
 
+    // Auto-sync Admin Credentials from .env
+    const { User } = require('./models');
+    const bcrypt = require('bcryptjs');
+    const adminEmail = process.env.ADMIN_EMAIL || 'admin@eggova.com';
+    const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
+
+    const [admin, created] = await User.findOrCreate({
+      where: { role: 'admin' },
+      defaults: {
+        name: 'Admin Superuser',
+        email: adminEmail,
+        phone: '0000000000',
+        passwordHash: await bcrypt.hash(adminPassword, 10),
+        role: 'admin',
+        district: 'Admin District',
+        state: 'Admin State'
+      }
+    });
+
+    if (!created && (admin.email !== adminEmail || !await bcrypt.compare(adminPassword, admin.passwordHash))) {
+      await admin.update({
+        email: adminEmail,
+        passwordHash: await bcrypt.hash(adminPassword, 10)
+      });
+      console.log('✅ Admin credentials updated from .env');
+    } else if (created) {
+      console.log('✅ Default Admin created from .env');
+    }
+
     // Initialize Daily Egg Rate Scheduler (Runs at 6 AM IST)
     initScheduler();
 
