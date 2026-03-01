@@ -10,12 +10,17 @@ const orderRoutes = require('./routes/orders');
 const paymentRoutes = require('./routes/payments');
 const adminRoutes = require('./routes/admin');
 const notificationRoutes = require('./routes/notifications');
+const webhookRoutes = require('./routes/webhooks');
 
 const app = express();
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json({
+  verify: (req, res, buf) => {
+    req.rawBody = buf;
+  }
+}));
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -24,6 +29,7 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/webhooks', webhookRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
