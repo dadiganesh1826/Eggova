@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart' show kDebugMode;
 class AppConstants {
   // API Base URL — auto-switches between local (debug) and production (release)
   static String get apiBaseUrl => kDebugMode
-      ? 'http://10.0.2.2:3000/api'   // Android Emulator → localhost
+      ? 'http://localhost:3000/api'   // Debug: works via `adb reverse tcp:3000 tcp:3000`
       : 'http://77.42.34.63/api';     // Production server
 
   // App Info
