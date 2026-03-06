@@ -1,7 +1,10 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
+
 class AppConstants {
-  // API Base URL - change this to your deployed server
-  // API Base URL - deployed server
-  static const String apiBaseUrl = 'http://77.42.34.63/api'; // Production server
+  // API Base URL — auto-switches between local (debug) and production (release)
+  static String get apiBaseUrl => kDebugMode
+      ? 'http://10.0.2.2:3000/api'   // Android Emulator → localhost
+      : 'http://77.42.34.63/api';     // Production server
 
   // App Info
   static const String appName = 'Eggova';
