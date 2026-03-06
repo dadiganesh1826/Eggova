@@ -31,19 +31,22 @@ class ApiService {
     ));
   }
 
-  // Auth — OTP flow
-  Future<Response> sendOtp(String phone) =>
-      _dio.post('/auth/send-otp', data: {'phone': phone});
+  // Auth — User (mobile + password)
+  Future<Response> checkPhone(String phone) =>
+      _dio.post('/auth/check-phone', data: {'phone': phone});
 
-  Future<Response> verifyOtp(String phone, String otp, {String? name, String? district}) =>
-      _dio.post('/auth/verify-otp', data: {
+  Future<Response> register(String phone, String password, String name, String district) =>
+      _dio.post('/auth/register', data: {
         'phone': phone,
-        'otp': otp,
-        if (name != null) 'name': name,
-        if (district != null) 'district': district,
+        'password': password,
+        'name': name,
+        'district': district,
       });
 
-  // Auth — Legacy (admin email login)
+  Future<Response> userLogin(String phone, String password) =>
+      _dio.post('/auth/user-login', data: {'phone': phone, 'password': password});
+
+  // Auth — Admin (email + password)
   Future<Response> login(String email, String password) =>
       _dio.post('/auth/login', data: {'email': email, 'password': password});
 

@@ -61,61 +61,80 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Send OTP to phone number
-  Future<Map<String, dynamic>?> sendOtp(String phone) async {
+  // Check if phone has an existing account
+  Future<bool?> checkPhone(String phone) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
-
     try {
-      final response = await _api.sendOtp(phone);
+      final response = await _api.checkPhone(phone);
       if (response.data['success']) {
         _isLoading = false;
         notifyListeners();
-        return response.data['data'];
+        return response.data['data']['isExistingUser'] as bool;
       } else {
         _error = response.data['message'];
       }
     } catch (e) {
       _error = _extractError(e);
     }
-
     _isLoading = false;
     notifyListeners();
     return null;
   }
 
-  // Verify OTP — login or first step of registration
-  Future<Map<String, dynamic>?> verifyOtp(String phone, String otp,
-      {String? name, String? district}) async {
+  // Register new user with mobile + password
+  Future<bool> registerUser(String phone, String password, String name, String district) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
-
     try {
-      final response =
-          await _api.verifyOtp(phone, otp, name: name, district: district);
+      final response = await _api.register(phone, password, name, district);
       if (response.data['success']) {
         final data = response.data['data'];
-        if (data['token'] != null) {
-          _token = data['token'];
-          _user = UserModel.fromJson(data['user']);
-          await _saveToStorage();
-          NotificationService.registerToken();
-        }
+        _token = data['token'];
+        _user = UserModel.fromJson(data['user']);
+        await _saveToStorage();
+        NotificationService.registerToken();
         _isLoading = false;
         notifyListeners();
-        return data;
+        return true;
       } else {
         _error = response.data['message'];
       }
     } catch (e) {
       _error = _extractError(e);
     }
-
     _isLoading = false;
     notifyListeners();
-    return null;
+    return false;
+  }
+
+  // Login existing user with mobile + password
+  Future<bool> loginWithPassword(String phone, String password) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+    try {
+      final response = await _api.userLogin(phone, password);
+      if (response.data['success']) {
+        final data = response.data['data'];
+        _token = data['token'];
+        _user = UserModel.fromJson(data['user']);
+        await _saveToStorage();
+        NotificationService.registerToken();
+        _isLoading = false;
+        notifyListeners();
+        return true;
+      } else {
+        _error = response.data['message'];
+      }
+    } catch (e) {
+      _error = _extractError(e);
+    }
+    _isLoading = false;
+    notifyListeners();
+    return false;
   }
 
   // Legacy email login (for admin)

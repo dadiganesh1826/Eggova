@@ -1,14 +1,10 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
 const { User } = require('../models');
 const auth = require('../middleware/auth');
 
 const router = express.Router();
-
-// In-memory OTP store: { phone: { otp, expiresAt } }
-const otpStore = {};
-// Verified phones waiting for profile completion: { phone: expiresAt }
-const verifiedPhones = {};
 
 // District-to-State mapping (egg price districts only)
 const DISTRICT_STATE_MAP = {
@@ -21,109 +17,54 @@ const DISTRICT_STATE_MAP = {
     'Warangal': 'Telangana',
 };
 
+function generateToken(userId) {
+    return jwt.sign({ id: userId }, process.env.JWT_SECRET, {
+        expiresIn: process.env.JWT_EXPIRES_IN || '7d',
+    });
+}
 
-// Send OTP
-router.post('/send-otp', async (req, res) => {
+// ─── Check Phone ─────────────────────────────────────────────────────────────
+// Returns { isExistingUser: bool } so the app knows whether to show
+// Login form or Registration form.
+router.post('/check-phone', async (req, res) => {
     try {
         const { phone } = req.body;
-
-        if (!phone || phone.length < 10) {
-            return res.status(400).json({ success: false, message: 'Valid phone number is required' });
+        if (!phone || String(phone).length < 10) {
+            return res.status(400).json({ success: false, message: 'Valid 10-digit phone number is required' });
         }
-
-        // Generate OTP (fixed 1234 for development)
-        const otp = '1234';
-        otpStore[phone] = {
-            otp,
-            expiresAt: Date.now() + 5 * 60 * 1000, // 5 minutes
-        };
-
-        console.log(`📱 OTP for ${phone}: ${otp}`);
-
-        // Check if user already exists
-        const existingUser = await User.findOne({ where: { phone } });
-
-        res.json({
-            success: true,
-            message: 'OTP sent successfully',
-            data: { isExistingUser: !!existingUser },
-        });
+        const user = await User.findOne({ where: { phone } });
+        res.json({ success: true, data: { isExistingUser: !!user } });
     } catch (error) {
-        console.error('Send OTP error:', error);
-        res.status(500).json({ success: false, message: 'Failed to send OTP' });
+        console.error('Check phone error:', error);
+        res.status(500).json({ success: false, message: 'Server error' });
     }
 });
 
-// Verify OTP & Login/Register
-router.post('/verify-otp', async (req, res) => {
+// ─── Register New User ────────────────────────────────────────────────────────
+router.post('/register', async (req, res) => {
     try {
-        const { phone, otp, name, district } = req.body;
+        const { phone, password, name, district } = req.body;
 
-        // Validate OTP — or check if phone was already verified (for profile completion)
-        const stored = otpStore[phone];
-        const alreadyVerified = verifiedPhones[phone] && Date.now() < verifiedPhones[phone];
-
-        if (!stored && !alreadyVerified) {
-            return res.status(400).json({ success: false, message: 'OTP not found. Please request a new one.' });
+        if (!phone || !password || !name || !district) {
+            return res.status(400).json({ success: false, message: 'Phone, password, name and district are required' });
+        }
+        if (String(phone).length < 10) {
+            return res.status(400).json({ success: false, message: 'Valid 10-digit phone number is required' });
+        }
+        if (password.length < 6) {
+            return res.status(400).json({ success: false, message: 'Password must be at least 6 characters' });
         }
 
-        if (stored) {
-            if (Date.now() > stored.expiresAt) {
-                delete otpStore[phone];
-                return res.status(400).json({ success: false, message: 'OTP expired. Please request a new one.' });
-            }
-            if (stored.otp !== otp) {
-                return res.status(400).json({ success: false, message: 'Invalid OTP' });
-            }
-            // OTP verified — clean up
-            delete otpStore[phone];
+        const existing = await User.findOne({ where: { phone } });
+        if (existing) {
+            return res.status(409).json({ success: false, message: 'An account with this mobile number already exists. Please login.' });
         }
 
-        // Check if user exists
-        let user = await User.findOne({ where: { phone } });
-
-        if (user) {
-            // Existing user — login
-            delete verifiedPhones[phone];
-            const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, {
-                expiresIn: process.env.JWT_EXPIRES_IN || '7d',
-            });
-
-            return res.json({
-                success: true,
-                message: 'Login successful',
-                data: { user: user.toSafeJSON(), token, isNewUser: false },
-            });
-        }
-
-        // New user — need name and district
-        if (!name || !district) {
-            // Mark phone as verified for 10 minutes (for profile completion screen)
-            verifiedPhones[phone] = Date.now() + 10 * 60 * 1000;
-            return res.json({
-                success: true,
-                message: 'OTP verified. Please complete your profile.',
-                data: { isNewUser: true, otpVerified: true },
-            });
-        }
-
-        // Determine state from district
         const state = DISTRICT_STATE_MAP[district] || 'Andhra Pradesh';
+        const passwordHash = await bcrypt.hash(password, 12);
 
-        // Create new user
-        user = await User.create({
-            name,
-            phone,
-            district,
-            state,
-        });
-
-        // Clean up verified phone
-        delete verifiedPhones[phone];
-
-        const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, {
-            expiresIn: process.env.JWT_EXPIRES_IN || '7d',
-        });
+        const user = await User.create({ name, phone, district, state, passwordHash });
+        const token = generateToken(user.id);
 
         res.status(201).json({
             success: true,
@@ -131,12 +72,47 @@ router.post('/verify-otp', async (req, res) => {
             data: { user: user.toSafeJSON(), token, isNewUser: true },
         });
     } catch (error) {
-        console.error('Verify OTP error:', error);
-        res.status(500).json({ success: false, message: 'Verification failed' });
+        console.error('Register error:', error);
+        res.status(500).json({ success: false, message: 'Registration failed' });
     }
 });
 
-// Legacy login (kept for admin access)
+// ─── User Login (Mobile + Password) ──────────────────────────────────────────
+router.post('/user-login', async (req, res) => {
+    try {
+        const { phone, password } = req.body;
+
+        if (!phone || !password) {
+            return res.status(400).json({ success: false, message: 'Phone and password are required' });
+        }
+
+        const user = await User.findOne({ where: { phone } });
+        if (!user) {
+            return res.status(401).json({ success: false, message: 'No account found with this mobile number' });
+        }
+
+        if (!user.passwordHash) {
+            return res.status(401).json({ success: false, message: 'This account has no password set. Please contact admin.' });
+        }
+
+        const isMatch = await bcrypt.compare(password, user.passwordHash);
+        if (!isMatch) {
+            return res.status(401).json({ success: false, message: 'Incorrect password' });
+        }
+
+        const token = generateToken(user.id);
+        res.json({
+            success: true,
+            message: 'Login successful',
+            data: { user: user.toSafeJSON(), token, isNewUser: false },
+        });
+    } catch (error) {
+        console.error('User login error:', error);
+        res.status(500).json({ success: false, message: 'Login failed' });
+    }
+});
+
+// ─── Admin Login (Email + Password) ──────────────────────────────────────────
 router.post('/login', async (req, res) => {
     try {
         const { email, password } = req.body;
@@ -151,10 +127,7 @@ router.post('/login', async (req, res) => {
             return res.status(401).json({ success: false, message: 'Invalid credentials' });
         }
 
-        const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, {
-            expiresIn: process.env.JWT_EXPIRES_IN || '7d',
-        });
-
+        const token = generateToken(user.id);
         res.json({
             success: true,
             message: 'Login successful',
@@ -166,17 +139,16 @@ router.post('/login', async (req, res) => {
     }
 });
 
-// Get profile
+// ─── Get Profile ──────────────────────────────────────────────────────────────
 router.get('/profile', auth, async (req, res) => {
     res.json({ success: true, data: { user: req.user.toSafeJSON() } });
 });
 
-// Update profile
+// ─── Update Profile ───────────────────────────────────────────────────────────
 router.put('/profile', auth, async (req, res) => {
     try {
         const { name, phone, email, address, district, state, pincode } = req.body;
 
-        // Auto-map state from district if district changed
         let resolvedState = state;
         if (district && DISTRICT_STATE_MAP[district]) {
             resolvedState = DISTRICT_STATE_MAP[district];
@@ -194,7 +166,35 @@ router.put('/profile', auth, async (req, res) => {
     }
 });
 
-// Update FCM token
+// ─── Change Password ──────────────────────────────────────────────────────────
+router.put('/change-password', auth, async (req, res) => {
+    try {
+        const { currentPassword, newPassword } = req.body;
+
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({ success: false, message: 'Current and new password are required' });
+        }
+        if (newPassword.length < 6) {
+            return res.status(400).json({ success: false, message: 'New password must be at least 6 characters' });
+        }
+
+        if (req.user.passwordHash) {
+            const isMatch = await bcrypt.compare(currentPassword, req.user.passwordHash);
+            if (!isMatch) {
+                return res.status(401).json({ success: false, message: 'Current password is incorrect' });
+            }
+        }
+
+        const passwordHash = await bcrypt.hash(newPassword, 12);
+        await req.user.update({ passwordHash });
+        res.json({ success: true, message: 'Password changed successfully' });
+    } catch (error) {
+        console.error('Change password error:', error);
+        res.status(500).json({ success: false, message: 'Failed to change password' });
+    }
+});
+
+// ─── Update FCM Token ─────────────────────────────────────────────────────────
 router.put('/fcm-token', auth, async (req, res) => {
     try {
         const { fcmToken } = req.body;
@@ -205,7 +205,7 @@ router.put('/fcm-token', auth, async (req, res) => {
     }
 });
 
-// Get available districts
+// ─── Get Districts ────────────────────────────────────────────────────────────
 router.get('/districts', (req, res) => {
     const districts = Object.entries(DISTRICT_STATE_MAP).map(([district, state]) => ({
         district,
