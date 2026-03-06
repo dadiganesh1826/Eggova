@@ -11,7 +11,6 @@ import 'services/notification_service.dart';
 
 import 'screens/splash_screen.dart';
 import 'screens/auth/login_screen.dart';
-import 'screens/auth/complete_profile_screen.dart';
 import 'screens/user/user_dashboard.dart';
 import 'screens/user/edit_profile_screen.dart';
 import 'screens/admin/admin_dashboard.dart';
@@ -51,7 +50,6 @@ class EggovaApp extends StatelessWidget {
         routes: {
           '/': (context) => const SplashScreen(),
           '/login': (context) => const LoginScreen(),
-          '/complete-profile': (context) => const CompleteProfileScreen(),
           '/user-dashboard': (context) => const UserDashboard(),
           '/edit-profile': (context) => const EditProfileScreen(),
           '/admin-dashboard': (context) => const AdminDashboard(),
