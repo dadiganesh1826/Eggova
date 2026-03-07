@@ -137,6 +137,28 @@ class AuthProvider extends ChangeNotifier {
     return false;
   }
 
+  // Reset password for existing user without OTP
+  Future<bool> forgotPassword(String phone, String newPassword) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+    try {
+      final response = await _api.forgotPassword(phone, newPassword);
+      if (response.data['success']) {
+        _isLoading = false;
+        notifyListeners();
+        return true;
+      } else {
+        _error = response.data['message'];
+      }
+    } catch (e) {
+      _error = _extractError(e);
+    }
+    _isLoading = false;
+    notifyListeners();
+    return false;
+  }
+
   // Legacy email login (for admin)
   Future<bool> login(String email, String password) async {
     _isLoading = true;
@@ -228,10 +250,13 @@ class AuthProvider extends ChangeNotifier {
     if (e is Exception) {
       try {
         final dioError = e as dynamic;
-        return dioError.response?.data?['message'] ?? 'Something went wrong';
+        if (dioError.response?.data?['message'] != null) {
+          return dioError.response.data['message'];
+        }
       } catch (_) {}
+      return 'Error: $e';
     }
-    return 'Connection error. Please try again.';
+    return 'Connection error: $e';
   }
 
   void clearError() {

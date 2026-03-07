@@ -46,6 +46,9 @@ class ApiService {
   Future<Response> userLogin(String phone, String password) =>
       _dio.post('/auth/user-login', data: {'phone': phone, 'password': password});
 
+  Future<Response> forgotPassword(String phone, String newPassword) =>
+      _dio.post('/auth/forgot-password', data: {'phone': phone, 'newPassword': newPassword});
+
   // Auth — Admin (email + password)
   Future<Response> login(String email, String password) =>
       _dio.post('/auth/login', data: {'email': email, 'password': password});

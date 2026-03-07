@@ -112,6 +112,33 @@ router.post('/user-login', async (req, res) => {
     }
 });
 
+// ─── Forgot Password (for existing users to set a new password) ─────────────
+router.post('/forgot-password', async (req, res) => {
+    try {
+        const { phone, newPassword } = req.body;
+
+        if (!phone || !newPassword) {
+            return res.status(400).json({ success: false, message: 'Phone and new password are required' });
+        }
+        if (newPassword.length < 6) {
+            return res.status(400).json({ success: false, message: 'New password must be at least 6 characters' });
+        }
+
+        const user = await User.findOne({ where: { phone } });
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'No account found with this mobile number' });
+        }
+
+        const passwordHash = await bcrypt.hash(newPassword, 12);
+        await user.update({ passwordHash });
+
+        res.json({ success: true, message: 'Password reset successfully' });
+    } catch (error) {
+        console.error('Forgot password error:', error);
+        res.status(500).json({ success: false, message: 'Failed to reset password' });
+    }
+});
+
 // ─── Admin Login (Email + Password) ──────────────────────────────────────────
 router.post('/login', async (req, res) => {
     try {

@@ -7,8 +7,8 @@ import '../../config/theme.dart';
 import '../../config/district_data.dart';
 import '../../providers/auth_provider.dart';
 
-// The three stages of the user login flow
-enum _AuthStage { phoneEntry, login, register }
+// The stages of the user login flow
+enum _AuthStage { phoneEntry, login, register, forgotPassword }
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -36,6 +36,12 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _regObscure = true;
   bool _confirmObscure = true;
 
+  // ── Forgot Password stage ────────────────────────────────────────────────
+  final _forgotPasswordController = TextEditingController();
+  final _forgotConfirmController = TextEditingController();
+  bool _forgotObscure = true;
+  bool _forgotConfirmObscure = true;
+
   // ── Admin mode ───────────────────────────────────────────────────────────
   final _emailController = TextEditingController();
   final _adminPasswordController = TextEditingController();
@@ -50,6 +56,8 @@ class _LoginScreenState extends State<LoginScreen> {
     _confirmPasswordController.dispose();
     _emailController.dispose();
     _adminPasswordController.dispose();
+    _forgotPasswordController.dispose();
+    _forgotConfirmController.dispose();
     super.dispose();
   }
 
@@ -151,6 +159,36 @@ class _LoginScreenState extends State<LoginScreen> {
         _navigate(auth);
       } else {
         _showSnack(auth.error ?? 'Registration failed');
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  // ────────────────────────────────────────────────────
+  // Step 2c — Forgot Password
+  // ────────────────────────────────────────────────────
+  Future<void> _resetPassword() async {
+    if (_isLoading) return;
+    final phone = _phoneController.text.trim();
+    final password = _forgotPasswordController.text;
+    final confirm = _forgotConfirmController.text;
+
+    if (password.length < 6) { _showSnack('Password must be at least 6 characters'); return; }
+    if (password != confirm) { _showSnack('Passwords do not match'); return; }
+
+    setState(() => _isLoading = true);
+    try {
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      final success = await auth.forgotPassword(phone, password);
+      if (!mounted) return;
+      if (success) {
+        _showSnack('Password reset successfully! Please login.', error: false);
+        _forgotPasswordController.clear();
+        _forgotConfirmController.clear();
+        setState(() => _stage = _AuthStage.login);
+      } else {
+        _showSnack(auth.error ?? 'Failed to reset password');
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -260,9 +298,10 @@ class _LoginScreenState extends State<LoginScreen> {
       duration: const Duration(milliseconds: 300),
       transitionBuilder: (child, anim) => FadeTransition(opacity: anim, child: child),
       child: switch (_stage) {
-        _AuthStage.phoneEntry => _buildPhoneEntry(),
-        _AuthStage.login     => _buildLoginForm(),
-        _AuthStage.register  => _buildRegisterForm(),
+        _AuthStage.phoneEntry     => _buildPhoneEntry(),
+        _AuthStage.login          => _buildLoginForm(),
+        _AuthStage.register       => _buildRegisterForm(),
+        _AuthStage.forgotPassword => _buildForgotPasswordForm(),
       },
     );
   }
@@ -302,6 +341,17 @@ class _LoginScreenState extends State<LoginScreen> {
         _phoneField(readOnly: true),
         const SizedBox(height: 14),
         _passwordField('Password', _loginPasswordController, _loginObscure, () => setState(() => _loginObscure = !_loginObscure)),
+        const SizedBox(height: 12),
+        Align(
+          alignment: Alignment.centerRight,
+          child: GestureDetector(
+            onTap: () => setState(() => _stage = _AuthStage.forgotPassword),
+            child: Text(
+              'Forgot Password?',
+              style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primaryDark),
+            ),
+          ),
+        ),
         const SizedBox(height: 20),
         _primaryButton('Login', _login),
       ],
@@ -352,6 +402,33 @@ class _LoginScreenState extends State<LoginScreen> {
         _passwordField('Confirm Password', _confirmPasswordController, _confirmObscure, () => setState(() => _confirmObscure = !_confirmObscure)),
         const SizedBox(height: 20),
         _primaryButton('Create Account', _register),
+      ],
+    );
+  }
+
+  Widget _buildForgotPasswordForm() {
+    return Column(
+      key: const ValueKey('forgot_password'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(children: [
+          GestureDetector(
+            onTap: () => setState(() => _stage = _AuthStage.login),
+            child: const Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: AppColors.darkGray),
+          ),
+          const SizedBox(width: 10),
+          Text('Reset Password', style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.black)),
+        ]),
+        const SizedBox(height: 4),
+        Text('Create a new password for your account', style: GoogleFonts.outfit(fontSize: 14, color: AppColors.gray)),
+        const SizedBox(height: 24),
+        _phoneField(readOnly: true),
+        const SizedBox(height: 14),
+        _passwordField('New Password (min 6 chars)', _forgotPasswordController, _forgotObscure, () => setState(() => _forgotObscure = !_forgotObscure)),
+        const SizedBox(height: 14),
+        _passwordField('Confirm Password', _forgotConfirmController, _forgotConfirmObscure, () => setState(() => _forgotConfirmObscure = !_forgotConfirmObscure)),
+        const SizedBox(height: 20),
+        _primaryButton('Reset Password', _resetPassword),
       ],
     );
   }
