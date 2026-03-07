@@ -2,9 +2,14 @@ import 'package:flutter/foundation.dart' show kDebugMode;
 
 class AppConstants {
   // API Base URL — auto-switches between local (debug) and production (release)
-  static String get apiBaseUrl => kDebugMode
-      ? 'http://localhost:3000/api'   // Debug: works via `adb reverse tcp:3000 tcp:3000`
-      : 'http://77.42.34.63/api';     // Production server
+  static String get apiBaseUrl {
+    const env = String.fromEnvironment('ENV');
+    if (env == 'prod') return 'http://77.42.34.63/api'; // Forced production server
+    
+    return kDebugMode
+        ? 'http://localhost:3000/api'   // Debug: works via `adb reverse tcp:3000 tcp:3000`
+        : 'http://77.42.34.63/api';     // Production server (fallback if no ENV passed)
+  }
 
   // App Info
   static const String appName = 'Eggova';
