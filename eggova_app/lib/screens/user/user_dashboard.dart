@@ -1174,7 +1174,7 @@ class _UserDashboardState extends State<UserDashboard> {
               _orderDetail(Icons.egg, '${order.trayCount} Trays'),
               const SizedBox(width: 24),
               _orderDetail(Icons.calendar_today,
-                  DateFormat('dd MMM yyyy').format(order.createdAt)),
+                  DateFormat('dd MMM yyyy, hh:mm a').format(order.createdAt)),
             ],
           ),
           if (order.paymentStatus == 'completed') ...[
