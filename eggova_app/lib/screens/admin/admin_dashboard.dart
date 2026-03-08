@@ -862,7 +862,6 @@ class _AdminDashboardState extends State<AdminDashboard> with TickerProviderStat
             children: [
               _detailChip(Icons.egg, '${order.trayCount} trays'),
               _detailChip(Icons.calendar_today, DateFormat('dd MMM, hh:mm a').format(order.createdAt)),
-              _detailChip(Icons.tag, order.orderNumber),
             ],
           ),
 

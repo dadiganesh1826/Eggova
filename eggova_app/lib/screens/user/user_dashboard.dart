@@ -1138,7 +1138,7 @@ class _UserDashboardState extends State<UserDashboard> {
             children: [
               Flexible(
                 child: Text(
-                  order.orderNumber,
+                  'Egg Tray Order',
                   style: GoogleFonts.outfit(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
