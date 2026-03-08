@@ -342,6 +342,9 @@ router.post('/request-phone-update', auth, async (req, res) => {
             return res.status(400).json({ success: false, message: 'Valid 10-digit phone number is required' });
         }
 
+        // Save the phone update request to the database
+        await req.user.update({ pendingPhone: newPhone });
+
         // Notify Admins
         try {
             const admins = await User.findAll({ where: { role: 'admin' } });
