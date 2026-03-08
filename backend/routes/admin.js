@@ -21,6 +21,61 @@ router.get('/users', auth, adminOnly, async (req, res) => {
     }
 });
 
+// Get pending users
+router.get('/users/pending', auth, adminOnly, async (req, res) => {
+    try {
+        const users = await User.findAll({
+            where: { role: 'user', status: 'pending' },
+            attributes: { exclude: ['passwordHash', 'password_hash'] },
+            order: [['created_at', 'DESC']],
+        });
+
+        res.json({ success: true, data: users });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Failed to fetch pending users' });
+    }
+});
+
+const { sendPush } = require('../services/push');
+
+// Approve a pending user
+router.put('/users/:id/approve', auth, adminOnly, async (req, res) => {
+    try {
+        const user = await User.findByPk(req.params.id);
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+
+        user.status = 'approved';
+        await user.save();
+
+        // Notify user
+        try {
+            await Notification.create({
+                userId: user.id,
+                title: 'Account Approved! 🎉',
+                message: 'Your Eggova account has been approved. You can now access all features!',
+                type: 'account_approved',
+            });
+
+            if (user.fcmToken) {
+                await sendPush(
+                    user.fcmToken,
+                    'Account Approved! 🎉',
+                    'Your Eggova account has been approved. You can now access all features!'
+                );
+            }
+        } catch (notifierErr) {
+            console.error('Failed to notify user of approval:', notifierErr);
+        }
+
+        res.json({ success: true, message: 'User approved successfully', data: user.toSafeJSON() });
+    } catch (error) {
+        console.error('Approve user error:', error);
+        res.status(500).json({ success: false, message: 'Failed to approve user' });
+    }
+});
+
 // Get pending payments
 router.get('/pending-payments', auth, adminOnly, async (req, res) => {
     try {

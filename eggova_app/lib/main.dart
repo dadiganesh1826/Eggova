@@ -14,6 +14,8 @@ import 'screens/auth/login_screen.dart';
 import 'screens/user/user_dashboard.dart';
 import 'screens/user/edit_profile_screen.dart';
 import 'screens/admin/admin_dashboard.dart';
+import 'screens/auth/complete_profile_screen.dart';
+import 'screens/auth/pending_approval_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -50,7 +52,9 @@ class EggovaApp extends StatelessWidget {
         routes: {
           '/': (context) => const SplashScreen(),
           '/login': (context) => const LoginScreen(),
-          '/user-dashboard': (context) => const UserDashboard(),
+          '/dashboard': (context) => const UserDashboard(),
+          '/complete-profile': (context) => const CompleteProfileScreen(),
+          '/pending-approval': (context) => const PendingApprovalScreen(),
           '/edit-profile': (context) => const EditProfileScreen(),
           '/admin-dashboard': (context) => const AdminDashboard(),
         },

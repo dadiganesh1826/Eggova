@@ -46,6 +46,16 @@ class ApiService {
   Future<Response> userLogin(String phone, String password) =>
       _dio.post('/auth/user-login', data: {'phone': phone, 'password': password});
 
+  Future<Response> googleLogin(String idToken) =>
+      _dio.post('/auth/google', data: {'idToken': idToken});
+
+  Future<Response> registerDetails(String idToken, String phone, String district) =>
+      _dio.post('/auth/register-details', data: {
+        'idToken': idToken,
+        'phone': phone,
+        'district': district,
+      });
+
   Future<Response> forgotPassword(String phone, String newPassword) =>
       _dio.post('/auth/forgot-password', data: {'phone': phone, 'newPassword': newPassword});
 
@@ -53,10 +63,19 @@ class ApiService {
   Future<Response> login(String email, String password) =>
       _dio.post('/auth/login', data: {'email': email, 'password': password});
 
+  // Admin — User Management
+  Future<Response> getPendingUsers() => _dio.get('/admin/users/pending');
+  Future<Response> approveUser(String userId) => _dio.put('/admin/users/$userId/approve');
+
+
   Future<Response> getProfile() => _dio.get('/auth/profile');
 
   Future<Response> updateProfile(Map<String, dynamic> data) =>
       _dio.put('/auth/profile', data: data);
+
+  Future<Response> requestPhoneUpdate(String newPhone) =>
+      _dio.post('/auth/request-phone-update', data: {'newPhone': newPhone});
+
 
   // Egg Prices
   Future<Response> getCurrentPrice({String? district}) =>

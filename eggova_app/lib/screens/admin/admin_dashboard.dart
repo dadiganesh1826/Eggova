@@ -8,6 +8,7 @@ import '../../config/theme.dart';
 import '../../config/district_data.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/admin_provider.dart';
+import '../../models/user.dart';
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -16,10 +17,11 @@ class AdminDashboard extends StatefulWidget {
   State<AdminDashboard> createState() => _AdminDashboardState();
 }
 
-class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProviderStateMixin {
+class _AdminDashboardState extends State<AdminDashboard> with TickerProviderStateMixin {
   int _currentIndex = 0;
   final _currencyFormat = NumberFormat.currency(locale: 'en_IN', symbol: '₹');
   late TabController _paymentTabController;
+  late TabController _userTabController;
 
   // Settings tab state
   String? _selectedDistrict;
@@ -38,10 +40,12 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
   void initState() {
     super.initState();
     _paymentTabController = TabController(length: 2, vsync: this);
+    _userTabController = TabController(length: 2, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final admin = Provider.of<AdminProvider>(context, listen: false);
       admin.fetchDashboardStats();
       admin.fetchUsers();
+      admin.fetchPendingUsers();
       admin.fetchPendingPayments();
       admin.fetchCompletedPayments();
       admin.fetchTodayPrices();
@@ -53,6 +57,7 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
   @override
   void dispose() {
     _paymentTabController.dispose();
+    _userTabController.dispose();
     _priceController.dispose();
     _stockController.dispose();
     super.dispose();
@@ -950,42 +955,146 @@ class _AdminDashboardState extends State<AdminDashboard> with SingleTickerProvid
     return Scaffold(
       backgroundColor: AppColors.offWhite,
       appBar: AppBar(
-        title: Text('Registered Users', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+        title: Text('User Management', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
         automaticallyImplyLeading: false,
         backgroundColor: AppColors.black,
+        bottom: TabBar(
+          controller: _userTabController,
+          indicatorColor: AppColors.primary,
+          labelColor: AppColors.primary,
+          unselectedLabelColor: AppColors.gray,
+          tabs: const [
+            Tab(text: 'Active'),
+            Tab(text: 'Pending'),
+          ],
+        ),
       ),
-      body: Consumer<AdminProvider>(
-        builder: (context, admin, _) {
-          if (admin.isLoading && admin.users.isEmpty) {
-            return const Center(child: CircularProgressIndicator(color: AppColors.primary));
-          }
+      body: TabBarView(
+        controller: _userTabController,
+        children: [
+          _buildActiveUsersList(),
+          _buildPendingUsersList(),
+        ],
+      ),
+    );
+  }
 
-          if (admin.users.isEmpty) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.people_outline, size: 80, color: AppColors.lightGray),
-                  const SizedBox(height: 16),
-                  Text('No users registered yet', style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.gray)),
-                ],
+  Widget _buildActiveUsersList() {
+    return Consumer<AdminProvider>(
+      builder: (context, admin, _) {
+        if (admin.isLoading && admin.users.isEmpty) {
+          return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+        }
+        if (admin.users.isEmpty) {
+          return _emptyPlaceholder('No active users', Icons.people_outline);
+        }
+        return RefreshIndicator(
+          onRefresh: () => admin.fetchUsers(),
+          color: AppColors.primary,
+          child: ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: admin.users.length,
+            itemBuilder: (context, index) {
+              final user = admin.users[index];
+              return _buildUserCard(user).animate().fadeIn(delay: (index * 50).ms);
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildPendingUsersList() {
+    return Consumer<AdminProvider>(
+      builder: (context, admin, _) {
+        if (admin.isLoading && admin.pendingUsers.isEmpty) {
+          return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+        }
+        if (admin.pendingUsers.isEmpty) {
+          return _emptyPlaceholder('No pending approvals', Icons.fact_check_outlined);
+        }
+        return RefreshIndicator(
+          onRefresh: () => admin.fetchPendingUsers(),
+          color: AppColors.primary,
+          child: ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: admin.pendingUsers.length,
+            itemBuilder: (context, index) {
+              final user = admin.pendingUsers[index];
+              return _buildPendingUserCard(user, admin).animate().fadeIn(delay: (index * 50).ms);
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _emptyPlaceholder(String text, IconData icon) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 64, color: AppColors.gray.withOpacity(0.3)),
+          const SizedBox(height: 16),
+          Text(text, style: GoogleFonts.outfit(color: AppColors.gray, fontSize: 16)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPendingUserCard(UserModel user, AdminProvider admin) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: AppColors.black.withOpacity(0.05), blurRadius: 10)],
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                backgroundColor: AppColors.primary.withOpacity(0.1),
+                child: Text(user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
+                    style: GoogleFonts.outfit(color: AppColors.primaryDark, fontWeight: FontWeight.bold)),
               ),
-            );
-          }
-
-          return RefreshIndicator(
-            onRefresh: () => admin.fetchUsers(),
-            color: AppColors.primary,
-            child: ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: admin.users.length,
-              itemBuilder: (context, index) {
-                final user = admin.users[index];
-                return _buildUserCard(user).animate().fadeIn(delay: (index * 80).ms, duration: 400.ms);
-              },
-            ),
-          );
-        },
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(user.name, style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16)),
+                    Text(user.phone, style: GoogleFonts.outfit(color: AppColors.gray, fontSize: 14)),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(color: Colors.amber.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                child: Text('PENDING', style: GoogleFonts.outfit(color: Colors.amber[800], fontSize: 10, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              const Icon(Icons.location_on_outlined, size: 14, color: AppColors.gray),
+              const SizedBox(width: 4),
+              Text(user.district, style: GoogleFonts.outfit(color: AppColors.gray, fontSize: 13)),
+              const Spacer(),
+              TextButton.icon(
+                onPressed: () async {
+                  final success = await admin.approveUser(user.id);
+                  if (success) _showSnack('User approved successfully');
+                },
+                icon: const Icon(Icons.check_circle_outline, size: 18, color: Colors.green),
+                label: Text('Approve', style: GoogleFonts.outfit(color: Colors.green, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

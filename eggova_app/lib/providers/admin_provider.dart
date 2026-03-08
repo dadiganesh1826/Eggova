@@ -6,6 +6,7 @@ import 'package:dio/dio.dart';
 
 class AdminProvider extends ChangeNotifier {
   List<UserModel> _users = [];
+  List<UserModel> _pendingUsers = [];
   List<OrderModel> _pendingPayments = [];
   List<OrderModel> _completedPayments = [];
   Map<String, dynamic> _dashboardStats = {};
@@ -15,13 +16,16 @@ class AdminProvider extends ChangeNotifier {
   String? _error;
 
   List<UserModel> get users => _users;
+  List<UserModel> get pendingUsers => _pendingUsers;
   List<OrderModel> get pendingPayments => _pendingPayments;
   List<OrderModel> get completedPayments => _completedPayments;
   Map<String, dynamic> get dashboardStats => _dashboardStats;
   List<Map<String, dynamic>> get todayPrices => _todayPrices;
+  List<Map<String, dynamic>> get priceTrends => _priceTrends;
   Map<String, dynamic> get todayStock => _todayStock;
   bool get isLoading => _isLoading;
   String? get error => _error;
+  bool get isLoadingTrends => _isLoadingTrends;
 
   final ApiService _api = ApiService();
 
@@ -53,6 +57,38 @@ class AdminProvider extends ChangeNotifier {
     _isLoading = false;
     notifyListeners();
   }
+
+  Future<void> fetchPendingUsers() async {
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final response = await _api.getPendingUsers();
+      if (response.data['success']) {
+        _pendingUsers = (response.data['data'] as List)
+            .map((json) => UserModel.fromJson(json))
+            .toList();
+      }
+    } catch (e) {
+      _error = 'Failed to fetch pending users';
+    }
+
+    _isLoading = false;
+    notifyListeners();
+  }
+
+  Future<bool> approveUser(String userId) async {
+    try {
+      final response = await _api.approveUser(userId);
+      if (response.data['success']) {
+        await fetchPendingUsers();
+        await fetchUsers(); // Refresh full list too
+        return true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
 
   Future<void> fetchPendingPayments() async {
     _isLoading = true;
@@ -132,8 +168,6 @@ class AdminProvider extends ChangeNotifier {
 
   List<Map<String, dynamic>> _priceTrends = [];
   bool _isLoadingTrends = false;
-  List<Map<String, dynamic>> get priceTrends => _priceTrends;
-  bool get isLoadingTrends => _isLoadingTrends;
 
   Future<void> fetchPriceTrends(String district) async {
     _isLoadingTrends = true;

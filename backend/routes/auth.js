@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { User } = require('../models');
 const auth = require('../middleware/auth');
+const admin = require('../config/firebase-admin');
 
 const router = express.Router();
 
@@ -23,6 +24,51 @@ function generateToken(userId) {
     });
 }
 
+// ─── Google Sign-In ──────────────────────────────────────────────────────────
+router.post('/google', async (req, res) => {
+    try {
+        const { idToken } = req.body;
+        if (!idToken) return res.status(400).json({ success: false, message: 'Google ID token required' });
+
+        const decodedToken = await admin.auth().verifyIdToken(idToken);
+        const { email, name, picture } = decodedToken;
+
+        let user = await User.findOne({ where: { email } });
+
+        if (!user) {
+            // New Google user, requires additional details (phone & district)
+            return res.json({
+                success: true,
+                message: 'Additional details required',
+                data: { requires_details: true, email, name }
+            });
+        }
+
+        if (user.status === 'pending') {
+            return res.json({
+                success: true,
+                message: 'Account pending admin approval',
+                data: { status: 'pending' }
+            });
+        }
+
+        if (user.status === 'rejected') {
+            return res.status(403).json({ success: false, message: 'Your account has been rejected. Contact admin.' });
+        }
+
+        // User is approved. Issue our own JWT token for them.
+        const token = generateToken(user.id);
+        res.json({
+            success: true,
+            message: 'Login successful',
+            data: { user: user.toSafeJSON(), token, isNewUser: false }
+        });
+    } catch (error) {
+        console.error('Google login error:', error);
+        res.status(500).json({ success: false, message: 'Google Sign-In failed' });
+    }
+});
+
 // ─── Check Phone ─────────────────────────────────────────────────────────────
 // Returns { isExistingUser: bool } so the app knows whether to show
 // Login form or Registration form.
@@ -40,40 +86,72 @@ router.post('/check-phone', async (req, res) => {
     }
 });
 
-// ─── Register New User ────────────────────────────────────────────────────────
-router.post('/register', async (req, res) => {
-    try {
-        const { phone, password, name, district } = req.body;
+const { sendPushToMany } = require('../services/push');
 
-        if (!phone || !password || !name || !district) {
-            return res.status(400).json({ success: false, message: 'Phone, password, name and district are required' });
+// ─── Register Details (After Google Sign-in for New Users) ────────────────
+router.post('/register-details', async (req, res) => {
+    try {
+        const { idToken, phone, district } = req.body;
+
+        if (!idToken || !phone || !district) {
+            return res.status(400).json({ success: false, message: 'Google Token, phone, and district are required' });
         }
         if (String(phone).length < 10) {
             return res.status(400).json({ success: false, message: 'Valid 10-digit phone number is required' });
         }
-        if (password.length < 6) {
-            return res.status(400).json({ success: false, message: 'Password must be at least 6 characters' });
+
+        const decodedToken = await admin.auth().verifyIdToken(idToken);
+        const { email, name } = decodedToken;
+
+        let user = await User.findOne({ where: { phone } });
+
+        if (user) {
+            if (user.email && user.email !== email) {
+                return res.status(409).json({ success: false, message: 'This mobile number is already linked to a different Google account.' });
+            }
+            // Link legacy account
+            user.email = email;
+            await user.save();
+            const token = generateToken(user.id);
+            return res.status(200).json({
+                success: true,
+                message: 'Account linked successfully',
+                data: { user: user.toSafeJSON(), token, isNewUser: false }
+            });
         }
 
-        const existing = await User.findOne({ where: { phone } });
-        if (existing) {
-            return res.status(409).json({ success: false, message: 'An account with this mobile number already exists. Please login.' });
+        const existingEmail = await User.findOne({ where: { email } });
+        if (existingEmail) {
+            return res.status(409).json({ success: false, message: 'An account with this email already exists but with a different phone number.' });
         }
 
         const state = DISTRICT_STATE_MAP[district] || 'Andhra Pradesh';
-        const passwordHash = await bcrypt.hash(password, 12);
+        user = await User.create({ name, email, phone, district, state, status: 'pending' });
 
-        const user = await User.create({ name, phone, district, state, passwordHash });
-        const token = generateToken(user.id);
+        // Notify Admins
+        try {
+            const admins = await User.findAll({ where: { role: 'admin' } });
+            const adminTokens = admins.map(a => a.fcmToken).filter(Boolean);
+            if (adminTokens.length > 0) {
+                await sendPushToMany(
+                    adminTokens,
+                    'New User Approval Required',
+                    `${name} (${phone}) has registered and is waiting for your approval.`,
+                    { type: 'pending_approval', userId: user.id }
+                );
+            }
+        } catch (pushErr) {
+            console.error('Failed to notify admins:', pushErr);
+        }
 
         res.status(201).json({
             success: true,
-            message: 'Account created successfully',
-            data: { user: user.toSafeJSON(), token, isNewUser: true },
+            message: 'Details submitted successfully. Waiting for Admin approval.',
+            data: { status: 'pending' },
         });
     } catch (error) {
-        console.error('Register error:', error);
-        res.status(500).json({ success: false, message: 'Registration failed' });
+        console.error('Register details error:', error);
+        res.status(500).json({ success: false, message: 'Submission failed' });
     }
 });
 
@@ -240,6 +318,37 @@ router.get('/districts', (req, res) => {
         label: `${district}, ${state}`,
     }));
     res.json({ success: true, data: districts });
+});
+
+// ─── Request Phone Update ──────────────────────────────────────────────────
+router.post('/request-phone-update', auth, async (req, res) => {
+    try {
+        const { newPhone } = req.body;
+        if (!newPhone || String(newPhone).length < 10) {
+            return res.status(400).json({ success: false, message: 'Valid 10-digit phone number is required' });
+        }
+
+        // Notify Admins
+        try {
+            const admins = await User.findAll({ where: { role: 'admin' } });
+            const adminTokens = admins.map(a => a.fcmToken).filter(Boolean);
+            if (adminTokens.length > 0) {
+                await sendPushToMany(
+                    adminTokens,
+                    'Phone Update Request',
+                    `${req.user.name} has requested to update their phone number to ${newPhone}.`,
+                    { type: 'phone_update_request', userId: req.user.id, newPhone }
+                );
+            }
+        } catch (pushErr) {
+            console.error('Failed to notify admins of phone update:', pushErr);
+        }
+
+        res.json({ success: true, message: 'Your request for phone number update has been sent to admin for approval.' });
+    } catch (error) {
+        console.error('Phone update request error:', error);
+        res.status(500).json({ success: false, message: 'Failed to send request' });
+    }
 });
 
 module.exports = router;

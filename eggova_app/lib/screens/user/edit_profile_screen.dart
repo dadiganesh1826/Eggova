@@ -145,12 +145,27 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
             // Phone (read-only)
             Center(
-              child: Text(
-                '+91 ${user?.phone ?? ''}',
-                style: GoogleFonts.outfit(
-                  color: AppColors.lightGray,
-                  fontSize: 14,
-                ),
+              child: Column(
+                children: [
+                  Text(
+                    '+91 ${user?.phone ?? ''}',
+                    style: GoogleFonts.outfit(
+                      color: AppColors.lightGray,
+                      fontSize: 14,
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () => _showPhoneUpdateRequestDialog(context),
+                    child: Text(
+                      'Request Phone Change',
+                      style: GoogleFonts.outfit(
+                        color: AppColors.primary,
+                        fontSize: 12,
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
 
@@ -339,6 +354,66 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         ),
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+      ),
+    );
+  }
+
+  void _showPhoneUpdateRequestDialog(BuildContext context) {
+    final phoneController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1A1A),
+        title: Text('Request Phone Change',
+            style: GoogleFonts.outfit(color: AppColors.white, fontWeight: FontWeight.bold)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Enter your new 10-digit mobile number. Administrative approval is required.',
+                style: GoogleFonts.outfit(color: AppColors.lightGray, fontSize: 13)),
+            const SizedBox(height: 16),
+            TextField(
+              controller: phoneController,
+              keyboardType: TextInputType.phone,
+              style: GoogleFonts.outfit(color: AppColors.white),
+              decoration: InputDecoration(
+                hintText: 'New phone number',
+                hintStyle: GoogleFonts.outfit(color: AppColors.gray),
+                prefixText: '+91 ',
+                prefixStyle: GoogleFonts.outfit(color: AppColors.primary),
+                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: AppColors.white.withOpacity(0.1))),
+                focusedBorder: const UnderlineInputBorder(borderSide: BorderSide(color: AppColors.primary)),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel', style: GoogleFonts.outfit(color: AppColors.gray)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final newPhone = phoneController.text.trim();
+              if (newPhone.length < 10) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter a valid 10-digit number')));
+                return;
+              }
+              final auth = Provider.of<AuthProvider>(context, listen: false);
+              final success = await auth.requestPhoneUpdate(newPhone);
+              if (mounted) {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text(success ? 'Request sent to admin! ✅' : (auth.error ?? 'Failed to send request')),
+                  backgroundColor: success ? AppColors.success : AppColors.error,
+                ));
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary, foregroundColor: AppColors.black),
+            child: Text('Submit', style: GoogleFonts.outfit(fontWeight: FontWeight.bold)),
+          ),
+        ],
       ),
     );
   }

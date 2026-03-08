@@ -54,6 +54,10 @@ const User = sequelize.define('User', {
         allowNull: true,
         field: 'fcm_token',
     },
+    status: {
+        type: DataTypes.ENUM('pending', 'approved', 'rejected'),
+        defaultValue: 'approved', // Legacy users default to approved
+    },
 }, {
     tableName: 'users',
     underscored: true,

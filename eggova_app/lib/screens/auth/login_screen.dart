@@ -8,7 +8,7 @@ import '../../config/district_data.dart';
 import '../../providers/auth_provider.dart';
 
 // The stages of the user login flow
-enum _AuthStage { phoneEntry, login, register, forgotPassword }
+enum _AuthStage { initial }
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -18,29 +18,9 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  // ── Shared ──────────────────────────────────────────────────────────────
-  final _phoneController = TextEditingController();
-  _AuthStage _stage = _AuthStage.phoneEntry;
   bool _isLoading = false;
   bool _isAdminMode = false;
-
-  // ── Login stage ──────────────────────────────────────────────────────────
-  final _loginPasswordController = TextEditingController();
-  bool _loginObscure = true;
-
-  // ── Register stage ───────────────────────────────────────────────────────
-  final _nameController = TextEditingController();
-  final _regPasswordController = TextEditingController();
-  final _confirmPasswordController = TextEditingController();
-  String? _selectedDistrict;
-  bool _regObscure = true;
-  bool _confirmObscure = true;
-
-  // ── Forgot Password stage ────────────────────────────────────────────────
-  final _forgotPasswordController = TextEditingController();
-  final _forgotConfirmController = TextEditingController();
-  bool _forgotObscure = true;
-  bool _forgotConfirmObscure = true;
+  _AuthStage _stage = _AuthStage.initial;
 
   // ── Admin mode ───────────────────────────────────────────────────────────
   final _emailController = TextEditingController();
@@ -49,15 +29,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   void dispose() {
-    _phoneController.dispose();
-    _loginPasswordController.dispose();
-    _nameController.dispose();
-    _regPasswordController.dispose();
-    _confirmPasswordController.dispose();
     _emailController.dispose();
     _adminPasswordController.dispose();
-    _forgotPasswordController.dispose();
-    _forgotConfirmController.dispose();
     super.dispose();
   }
 
@@ -80,115 +53,35 @@ class _LoginScreenState extends State<LoginScreen> {
     if (auth.isAdmin) {
       Navigator.pushReplacementNamed(context, '/admin-dashboard');
     } else {
-      Navigator.pushReplacementNamed(context, '/user-dashboard');
+      Navigator.pushReplacementNamed(context, '/dashboard');
     }
   }
 
   // ────────────────────────────────────────────────────
-  // Step 1 — Check phone
+  // Google Sign-In
   // ────────────────────────────────────────────────────
-  Future<void> _checkPhone() async {
+  Future<void> _handleGoogleSignIn() async {
     if (_isLoading) return;
-    final phone = _phoneController.text.trim();
-    if (phone.length < 10) {
-      _showSnack('Please enter a valid 10-digit mobile number');
-      return;
-    }
     setState(() => _isLoading = true);
-    try {
-      final auth = Provider.of<AuthProvider>(context, listen: false);
-      final isExisting = await auth.checkPhone(phone);
-      if (!mounted) return;
-      if (isExisting == null) {
-        _showSnack(auth.error ?? 'Something went wrong');
-        return;
-      }
-      setState(() => _stage = isExisting ? _AuthStage.login : _AuthStage.register);
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
 
-  // ────────────────────────────────────────────────────
-  // Step 2a — Login
-  // ────────────────────────────────────────────────────
-  Future<void> _login() async {
-    if (_isLoading) return;
-    final phone = _phoneController.text.trim();
-    final password = _loginPasswordController.text;
-    if (password.isEmpty) {
-      _showSnack('Please enter your password');
-      return;
-    }
-    setState(() => _isLoading = true);
     try {
       final auth = Provider.of<AuthProvider>(context, listen: false);
-      final success = await auth.loginWithPassword(phone, password);
+      final success = await auth.signInWithGoogle();
+
       if (!mounted) return;
+
       if (success) {
-        _navigate(auth);
+        if (auth.requiresDetails) {
+          Navigator.pushNamed(context, '/complete-profile');
+        } else if (auth.isPendingApproval) {
+          Navigator.pushNamed(context, '/pending-approval');
+        } else {
+          _navigate(auth);
+        }
       } else {
-        _showSnack(auth.error ?? 'Login failed');
-      }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  // ────────────────────────────────────────────────────
-  // Step 2b — Register
-  // ────────────────────────────────────────────────────
-  Future<void> _register() async {
-    if (_isLoading) return;
-    final phone = _phoneController.text.trim();
-    final name = _nameController.text.trim();
-    final password = _regPasswordController.text;
-    final confirm = _confirmPasswordController.text;
-
-    if (name.isEmpty) { _showSnack('Please enter your name'); return; }
-    if (_selectedDistrict == null) { _showSnack('Please select your district'); return; }
-    if (password.length < 6) { _showSnack('Password must be at least 6 characters'); return; }
-    if (password != confirm) { _showSnack('Passwords do not match'); return; }
-
-    setState(() => _isLoading = true);
-    try {
-      final auth = Provider.of<AuthProvider>(context, listen: false);
-      final success = await auth.registerUser(phone, password, name, _selectedDistrict!);
-      if (!mounted) return;
-      if (success) {
-        _navigate(auth);
-      } else {
-        _showSnack(auth.error ?? 'Registration failed');
-      }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  // ────────────────────────────────────────────────────
-  // Step 2c — Forgot Password
-  // ────────────────────────────────────────────────────
-  Future<void> _resetPassword() async {
-    if (_isLoading) return;
-    final phone = _phoneController.text.trim();
-    final password = _forgotPasswordController.text;
-    final confirm = _forgotConfirmController.text;
-
-    if (password.length < 6) { _showSnack('Password must be at least 6 characters'); return; }
-    if (password != confirm) { _showSnack('Passwords do not match'); return; }
-
-    setState(() => _isLoading = true);
-    try {
-      final auth = Provider.of<AuthProvider>(context, listen: false);
-      final success = await auth.forgotPassword(phone, password);
-      if (!mounted) return;
-      if (success) {
-        _showSnack('Password reset successfully! Please login.', error: false);
-        _forgotPasswordController.clear();
-        _forgotConfirmController.clear();
-        setState(() => _stage = _AuthStage.login);
-      } else {
-        _showSnack(auth.error ?? 'Failed to reset password');
+        if (auth.error != null) {
+          _showSnack(auth.error!);
+        }
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -275,7 +168,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: TextButton(
                   onPressed: () => setState(() {
                     _isAdminMode = !_isAdminMode;
-                    _stage = _AuthStage.phoneEntry;
                   }),
                   child: Text(
                     _isAdminMode ? 'Login as Customer' : 'Admin Login',
@@ -291,144 +183,56 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   // ────────────────────────────
-  // User flow (all 3 stages)
+  // User flow (Google Only)
   // ────────────────────────────
   Widget _buildUserFlow() {
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 300),
-      transitionBuilder: (child, anim) => FadeTransition(opacity: anim, child: child),
-      child: switch (_stage) {
-        _AuthStage.phoneEntry     => _buildPhoneEntry(),
-        _AuthStage.login          => _buildLoginForm(),
-        _AuthStage.register       => _buildRegisterForm(),
-        _AuthStage.forgotPassword => _buildForgotPasswordForm(),
-      },
-    );
-  }
-
-  Widget _buildPhoneEntry() {
     return Column(
-      key: const ValueKey('phone'),
+      key: const ValueKey('google_auth'),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text('Welcome!', style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.black)),
         const SizedBox(height: 4),
-        Text('Enter your mobile number to continue', style: GoogleFonts.outfit(fontSize: 14, color: AppColors.gray)),
-        const SizedBox(height: 24),
-        _phoneField(),
-        const SizedBox(height: 20),
-        _primaryButton('Continue', _checkPhone),
-      ],
-    );
-  }
-
-  Widget _buildLoginForm() {
-    return Column(
-      key: const ValueKey('login'),
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(children: [
-          GestureDetector(
-            onTap: () => setState(() => _stage = _AuthStage.phoneEntry),
-            child: const Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: AppColors.darkGray),
-          ),
-          const SizedBox(width: 10),
-          Text('Login', style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.black)),
-        ]),
-        const SizedBox(height: 4),
-        Text('Welcome back! 👋', style: GoogleFonts.outfit(fontSize: 14, color: AppColors.gray)),
-        const SizedBox(height: 24),
-        _phoneField(readOnly: true),
-        const SizedBox(height: 14),
-        _passwordField('Password', _loginPasswordController, _loginObscure, () => setState(() => _loginObscure = !_loginObscure)),
-        const SizedBox(height: 12),
-        Align(
-          alignment: Alignment.centerRight,
-          child: GestureDetector(
-            onTap: () => setState(() => _stage = _AuthStage.forgotPassword),
-            child: Text(
-              'Forgot Password?',
-              style: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primaryDark),
+        Text('Sign in to continue to Eggova', style: GoogleFonts.outfit(fontSize: 14, color: AppColors.gray)),
+        const SizedBox(height: 32),
+        
+        // Google Button
+        SizedBox(
+          width: double.infinity,
+          height: 54,
+          child: OutlinedButton(
+            onPressed: _isLoading ? null : _handleGoogleSignIn,
+            style: OutlinedButton.styleFrom(
+              side: BorderSide(color: AppColors.gray.withOpacity(0.2)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (_isLoading)
+                  const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary))
+                else ...[
+                   Image.network(
+                    'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_\"G\"_logo.svg/1024px-Google_\"G\"_logo.svg.png',
+                    height: 24,
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Sign in with Google',
+                    style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.darkGray),
+                  ),
+                ],
+              ],
             ),
           ),
         ),
+        
         const SizedBox(height: 20),
-        _primaryButton('Login', _login),
-      ],
-    );
-  }
-
-  Widget _buildRegisterForm() {
-    final districts = DistrictData.allDistricts;
-    return Column(
-      key: const ValueKey('register'),
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(children: [
-          GestureDetector(
-            onTap: () => setState(() => _stage = _AuthStage.phoneEntry),
-            child: const Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: AppColors.darkGray),
-          ),
-          const SizedBox(width: 10),
-          Text('Create Account', style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.black)),
-        ]),
-        const SizedBox(height: 4),
-        Text('Set up your Eggova account', style: GoogleFonts.outfit(fontSize: 14, color: AppColors.gray)),
-        const SizedBox(height: 24),
-        _phoneField(readOnly: true),
-        const SizedBox(height: 14),
-        _textField('Full Name', _nameController, icon: Icons.person_outline_rounded),
-        const SizedBox(height: 14),
-        // District dropdown
-        DropdownButtonFormField<String>(
-          value: _selectedDistrict,
-          isExpanded: true,
-          decoration: InputDecoration(
-            labelText: 'District',
-            labelStyle: GoogleFonts.outfit(color: AppColors.gray),
-            prefixIcon: const Icon(Icons.location_on_outlined, color: AppColors.gray),
-            filled: true,
-            fillColor: AppColors.offWhite,
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-          ),
-          style: GoogleFonts.outfit(color: AppColors.darkGray, fontSize: 15),
-          items: districts.map((d) => DropdownMenuItem(value: d, child: Text(d))).toList(),
-          onChanged: (v) => setState(() => _selectedDistrict = v),
+        Text(
+          'By continuing, you agree to our Terms of Service.',
+          textAlign: TextAlign.center,
+          style: GoogleFonts.outfit(fontSize: 12, color: AppColors.gray),
         ),
-        const SizedBox(height: 14),
-        _passwordField('Password (min 6 chars)', _regPasswordController, _regObscure, () => setState(() => _regObscure = !_regObscure)),
-        const SizedBox(height: 14),
-        _passwordField('Confirm Password', _confirmPasswordController, _confirmObscure, () => setState(() => _confirmObscure = !_confirmObscure)),
-        const SizedBox(height: 20),
-        _primaryButton('Create Account', _register),
-      ],
-    );
-  }
-
-  Widget _buildForgotPasswordForm() {
-    return Column(
-      key: const ValueKey('forgot_password'),
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(children: [
-          GestureDetector(
-            onTap: () => setState(() => _stage = _AuthStage.login),
-            child: const Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: AppColors.darkGray),
-          ),
-          const SizedBox(width: 10),
-          Text('Reset Password', style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.black)),
-        ]),
-        const SizedBox(height: 4),
-        Text('Create a new password for your account', style: GoogleFonts.outfit(fontSize: 14, color: AppColors.gray)),
-        const SizedBox(height: 24),
-        _phoneField(readOnly: true),
-        const SizedBox(height: 14),
-        _passwordField('New Password (min 6 chars)', _forgotPasswordController, _forgotObscure, () => setState(() => _forgotObscure = !_forgotObscure)),
-        const SizedBox(height: 14),
-        _passwordField('Confirm Password', _forgotConfirmController, _forgotConfirmObscure, () => setState(() => _forgotConfirmObscure = !_forgotConfirmObscure)),
-        const SizedBox(height: 20),
-        _primaryButton('Reset Password', _resetPassword),
       ],
     );
   }
@@ -457,27 +261,6 @@ class _LoginScreenState extends State<LoginScreen> {
   // ────────────────────────────
   // Reusable widgets
   // ────────────────────────────
-  Widget _phoneField({bool readOnly = false}) {
-    return TextFormField(
-      controller: _phoneController,
-      readOnly: readOnly,
-      keyboardType: TextInputType.phone,
-      maxLength: 10,
-      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-      style: GoogleFonts.outfit(fontSize: 15, color: readOnly ? AppColors.gray : AppColors.darkGray),
-      decoration: InputDecoration(
-        labelText: 'Mobile Number',
-        labelStyle: GoogleFonts.outfit(color: AppColors.gray),
-        prefixIcon: const Icon(Icons.phone_outlined, color: AppColors.gray),
-        counterText: '',
-        filled: true,
-        fillColor: readOnly ? AppColors.lightGray.withOpacity(0.2) : AppColors.offWhite,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      ),
-    );
-  }
-
   Widget _textField(String label, TextEditingController controller, {IconData? icon, TextInputType? keyboard}) {
     return TextFormField(
       controller: controller,

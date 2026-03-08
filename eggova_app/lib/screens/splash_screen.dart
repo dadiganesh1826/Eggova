@@ -35,7 +35,7 @@ class _SplashScreenState extends State<SplashScreen> {
       if (auth.isAdmin) {
         Navigator.pushReplacementNamed(context, '/admin-dashboard');
       } else {
-        Navigator.pushReplacementNamed(context, '/user-dashboard');
+        Navigator.pushReplacementNamed(context, '/dashboard');
       }
     } else {
       Navigator.pushReplacementNamed(context, '/login');
