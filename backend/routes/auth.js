@@ -109,14 +109,31 @@ router.post('/register-details', async (req, res) => {
             if (user.email && user.email !== email) {
                 return res.status(409).json({ success: false, message: 'This mobile number is already linked to a different Google account.' });
             }
-            // Link legacy account
+            // Link legacy account and require Admin Approval
             user.email = email;
+            user.status = 'pending';
             await user.save();
-            const token = generateToken(user.id);
+
+            // Notify Admins
+            try {
+                const admins = await User.findAll({ where: { role: 'admin' } });
+                const adminTokens = admins.map(a => a.fcmToken).filter(Boolean);
+                if (adminTokens.length > 0) {
+                    await sendPushToMany(
+                        adminTokens,
+                        'Legacy Account Link Approval',
+                        `${name} (${phone}) verified Google sign-in and is waiting for your approval.`,
+                        { type: 'pending_approval', userId: user.id }
+                    );
+                }
+            } catch (pushErr) {
+                console.error('Failed to notify admins:', pushErr);
+            }
+
             return res.status(200).json({
                 success: true,
-                message: 'Account linked successfully',
-                data: { user: user.toSafeJSON(), token, isNewUser: false }
+                message: 'Account linking requested. Waiting for Admin approval.',
+                data: { status: 'pending' }
             });
         }
 
