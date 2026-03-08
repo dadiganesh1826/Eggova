@@ -109,32 +109,29 @@ router.post('/register-details', async (req, res) => {
             if (user.email && user.email !== email) {
                 return res.status(409).json({ success: false, message: 'This mobile number is already linked to a different Google account.' });
             }
-            // Link legacy account and require Admin Approval
+            // Link legacy account directly
             user.email = email;
-            user.status = 'pending';
+            // Ensure status isn't incorrectly set to pending if it was already an active user
+            if (user.status === 'pending') {
+                // If they were pending for some reason, they stay pending
+            }
             await user.save();
 
-            // Notify Admins
-            try {
-                const admins = await User.findAll({ where: { role: 'admin' } });
-                const adminTokens = admins.map(a => a.fcmToken).filter(Boolean);
-                if (adminTokens.length > 0) {
-                    await sendPushToMany(
-                        adminTokens,
-                        'Legacy Account Link Approval',
-                        `${name} (${phone}) verified Google sign-in and is waiting for your approval.`,
-                        { type: 'pending_approval', userId: user.id }
-                    );
-                }
-            } catch (pushErr) {
-                console.error('Failed to notify admins:', pushErr);
+            // If they are approved, log them in instantly
+            if (user.status === 'approved') {
+                const token = generateToken(user.id);
+                return res.status(200).json({
+                    success: true,
+                    message: 'Account linked successfully',
+                    data: { user: user.toSafeJSON(), token, isNewUser: false }
+                });
+            } else {
+                return res.status(200).json({
+                    success: true,
+                    message: 'Account linking requested. Waiting for Admin approval.',
+                    data: { status: user.status }
+                });
             }
-
-            return res.status(200).json({
-                success: true,
-                message: 'Account linking requested. Waiting for Admin approval.',
-                data: { status: 'pending' }
-            });
         }
 
         const existingEmail = await User.findOne({ where: { email } });
