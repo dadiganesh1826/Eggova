@@ -10,6 +10,7 @@ class UserModel {
   final String role;
   final String? fcmToken;
   final String? status;
+  final String? pendingPhone;
   final DateTime? createdAt;
 
   UserModel({
@@ -24,6 +25,7 @@ class UserModel {
     required this.role,
     this.fcmToken,
     this.status,
+    this.pendingPhone,
     this.createdAt,
   });
 
@@ -42,6 +44,7 @@ class UserModel {
       role: json['role'] ?? 'user',
       fcmToken: json['fcmToken'] ?? json['fcm_token'],
       status: json['status'],
+      pendingPhone: json['pendingPhone'] ?? json['pending_phone'],
       createdAt: json['createdAt'] != null
           ? DateTime.parse(json['createdAt'])
           : (json['created_at'] != null ? DateTime.parse(json['created_at']) : null),
@@ -60,6 +63,7 @@ class UserModel {
       'pincode': pincode,
       'role': role,
       'status': status,
+      'pendingPhone': pendingPhone,
     };
   }
 }

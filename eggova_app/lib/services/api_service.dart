@@ -66,6 +66,11 @@ class ApiService {
   // Admin — User Management
   Future<Response> getPendingUsers() => _dio.get('/admin/users/pending');
   Future<Response> approveUser(String userId) => _dio.put('/admin/users/$userId/approve');
+  Future<Response> rejectUser(String userId) => _dio.put('/admin/users/$userId/reject');
+
+  Future<Response> getPendingPhoneUsers() => _dio.get('/admin/users/pending-phone');
+  Future<Response> approvePhoneUpdate(String userId) => _dio.put('/admin/users/$userId/approve-phone');
+  Future<Response> rejectPhoneUpdate(String userId) => _dio.put('/admin/users/$userId/reject-phone');
 
 
   Future<Response> getProfile() => _dio.get('/auth/profile');

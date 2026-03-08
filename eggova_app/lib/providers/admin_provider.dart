@@ -7,6 +7,7 @@ import 'package:dio/dio.dart';
 class AdminProvider extends ChangeNotifier {
   List<UserModel> _users = [];
   List<UserModel> _pendingUsers = [];
+  List<UserModel> _pendingPhoneUsers = [];
   List<OrderModel> _pendingPayments = [];
   List<OrderModel> _completedPayments = [];
   Map<String, dynamic> _dashboardStats = {};
@@ -17,6 +18,7 @@ class AdminProvider extends ChangeNotifier {
 
   List<UserModel> get users => _users;
   List<UserModel> get pendingUsers => _pendingUsers;
+  List<UserModel> get pendingPhoneUsers => _pendingPhoneUsers;
   List<OrderModel> get pendingPayments => _pendingPayments;
   List<OrderModel> get completedPayments => _completedPayments;
   Map<String, dynamic> get dashboardStats => _dashboardStats;
@@ -83,6 +85,60 @@ class AdminProvider extends ChangeNotifier {
       if (response.data['success']) {
         await fetchPendingUsers();
         await fetchUsers(); // Refresh full list too
+        return true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  Future<bool> rejectUser(String userId) async {
+    try {
+      final response = await _api.rejectUser(userId);
+      if (response.data['success']) {
+        await fetchPendingUsers();
+        await fetchUsers(); // Refresh full list too
+        return true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  Future<void> fetchPendingPhoneUsers() async {
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final response = await _api.getPendingPhoneUsers();
+      if (response.data['success']) {
+        _pendingPhoneUsers = (response.data['data'] as List)
+            .map((json) => UserModel.fromJson(json))
+            .toList();
+      }
+    } catch (e) {
+      _error = 'Failed to fetch pending phone updates';
+    }
+
+    _isLoading = false;
+    notifyListeners();
+  }
+
+  Future<bool> approvePhoneUpdate(String userId) async {
+    try {
+      final response = await _api.approvePhoneUpdate(userId);
+      if (response.data['success']) {
+        await fetchPendingPhoneUsers();
+        await fetchUsers(); // Refresh to show new phone in user list
+        return true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  Future<bool> rejectPhoneUpdate(String userId) async {
+    try {
+      final response = await _api.rejectPhoneUpdate(userId);
+      if (response.data['success']) {
+        await fetchPendingPhoneUsers();
         return true;
       }
     } catch (_) {}

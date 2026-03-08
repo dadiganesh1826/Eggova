@@ -363,26 +363,26 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1A1A1A),
+        backgroundColor: AppColors.white,
         title: Text('Request Phone Change',
-            style: GoogleFonts.outfit(color: AppColors.white, fontWeight: FontWeight.bold)),
+            style: GoogleFonts.outfit(color: AppColors.black, fontWeight: FontWeight.bold)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Enter your new 10-digit mobile number. Administrative approval is required.',
-                style: GoogleFonts.outfit(color: AppColors.lightGray, fontSize: 13)),
+                style: GoogleFonts.outfit(color: AppColors.darkGray, fontSize: 13)),
             const SizedBox(height: 16),
             TextField(
               controller: phoneController,
               keyboardType: TextInputType.phone,
-              style: GoogleFonts.outfit(color: AppColors.white),
+              style: GoogleFonts.outfit(color: AppColors.darkGray),
               decoration: InputDecoration(
                 hintText: 'New phone number',
                 hintStyle: GoogleFonts.outfit(color: AppColors.gray),
                 prefixText: '+91 ',
                 prefixStyle: GoogleFonts.outfit(color: AppColors.primary),
-                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: AppColors.white.withOpacity(0.1))),
+                enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: AppColors.gray.withOpacity(0.3))),
                 focusedBorder: const UnderlineInputBorder(borderSide: BorderSide(color: AppColors.primary)),
               ),
             ),

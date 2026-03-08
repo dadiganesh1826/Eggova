@@ -9,6 +9,7 @@ import '../../config/district_data.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/admin_provider.dart';
 import '../../models/user.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -23,6 +24,10 @@ class _AdminDashboardState extends State<AdminDashboard> with TickerProviderStat
   late TabController _paymentTabController;
   late TabController _userTabController;
 
+  // User Search state
+  String _userSearchQuery = '';
+  final _userSearchController = TextEditingController();
+
   // Settings tab state
   String? _selectedDistrict;
   String? _selectedTrendDistrict;
@@ -32,6 +37,8 @@ class _AdminDashboardState extends State<AdminDashboard> with TickerProviderStat
   bool _isSettingStock = false;
 
   // Payment filters
+  String _paymentSearchQuery = '';
+  final _paymentSearchController = TextEditingController();
   String _completedFilterMode = 'all'; // 'all', 'upi', 'cash'
   DateTimeRange? _completedFilterDate;
   DateTimeRange? _pendingFilterDate;
@@ -40,12 +47,13 @@ class _AdminDashboardState extends State<AdminDashboard> with TickerProviderStat
   void initState() {
     super.initState();
     _paymentTabController = TabController(length: 2, vsync: this);
-    _userTabController = TabController(length: 2, vsync: this);
+    _userTabController = TabController(length: 3, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final admin = Provider.of<AdminProvider>(context, listen: false);
       admin.fetchDashboardStats();
       admin.fetchUsers();
       admin.fetchPendingUsers();
+      admin.fetchPendingPhoneUsers();
       admin.fetchPendingPayments();
       admin.fetchCompletedPayments();
       admin.fetchTodayPrices();
@@ -57,7 +65,9 @@ class _AdminDashboardState extends State<AdminDashboard> with TickerProviderStat
   @override
   void dispose() {
     _paymentTabController.dispose();
+    _paymentSearchController.dispose();
     _userTabController.dispose();
+    _userSearchController.dispose();
     _priceController.dispose();
     _stockController.dispose();
     super.dispose();
@@ -319,7 +329,7 @@ class _AdminDashboardState extends State<AdminDashboard> with TickerProviderStat
     return Scaffold(
       backgroundColor: AppColors.offWhite,
       appBar: AppBar(
-        title: Text('Payments', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+        title: _buildPaymentSearchBar(),
         automaticallyImplyLeading: false,
         backgroundColor: AppColors.black,
         bottom: TabBar(
@@ -345,6 +355,40 @@ class _AdminDashboardState extends State<AdminDashboard> with TickerProviderStat
     );
   }
 
+  Widget _buildPaymentSearchBar() {
+    return Container(
+      height: 40,
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: TextField(
+        controller: _paymentSearchController,
+        style: GoogleFonts.outfit(color: AppColors.black, fontSize: 14),
+        cursorColor: AppColors.primary,
+        decoration: InputDecoration(
+          hintText: 'Search orders by name or phone...',
+          hintStyle: GoogleFonts.outfit(color: AppColors.gray),
+          prefixIcon: const Icon(Icons.search, color: AppColors.gray, size: 20),
+          suffixIcon: _paymentSearchQuery.isNotEmpty
+              ? IconButton(
+                  icon: const Icon(Icons.clear, color: AppColors.gray, size: 20),
+                  onPressed: () {
+                    _paymentSearchController.clear();
+                    setState(() => _paymentSearchQuery = '');
+                  },
+                )
+              : null,
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        ),
+        onChanged: (val) {
+          setState(() => _paymentSearchQuery = val);
+        },
+      ),
+    );
+  }
+
   Widget _buildPendingPaymentsList() {
     return Consumer<AdminProvider>(
       builder: (context, admin, _) {
@@ -353,6 +397,16 @@ class _AdminDashboardState extends State<AdminDashboard> with TickerProviderStat
         }
 
         final filtered = admin.pendingPayments.where((order) {
+          // Text search filter
+          if (_paymentSearchQuery.isNotEmpty) {
+            final query = _paymentSearchQuery.toLowerCase();
+            final userName = (order.isOffline ? order.customerName : order.user?.name)?.toLowerCase() ?? '';
+            final userPhone = (order.isOffline ? order.customerPhone : order.user?.phone) ?? '';
+            if (!userName.contains(query) && !userPhone.contains(query)) {
+              return false;
+            }
+          }
+
           if (_pendingFilterDate != null) {
             final date = order.createdAt;
             if (date.isBefore(_pendingFilterDate!.start) ||
@@ -504,6 +558,16 @@ class _AdminDashboardState extends State<AdminDashboard> with TickerProviderStat
         }
 
         final filtered = admin.completedPayments.where((order) {
+          // Text search filter
+          if (_paymentSearchQuery.isNotEmpty) {
+            final query = _paymentSearchQuery.toLowerCase();
+            final userName = (order.isOffline ? order.customerName : order.user?.name)?.toLowerCase() ?? '';
+            final userPhone = (order.isOffline ? order.customerPhone : order.user?.phone) ?? '';
+            if (!userName.contains(query) && !userPhone.contains(query)) {
+              return false;
+            }
+          }
+
           // Payment mode filter
           if (_completedFilterMode == 'upi') {
             final via = (order.paidVia ?? order.paymentMethod ?? '').toLowerCase();
@@ -955,7 +1019,7 @@ class _AdminDashboardState extends State<AdminDashboard> with TickerProviderStat
     return Scaffold(
       backgroundColor: AppColors.offWhite,
       appBar: AppBar(
-        title: Text('User Management', style: GoogleFonts.outfit(fontWeight: FontWeight.w700)),
+        title: _buildUserSearchBar(),
         automaticallyImplyLeading: false,
         backgroundColor: AppColors.black,
         bottom: TabBar(
@@ -965,7 +1029,8 @@ class _AdminDashboardState extends State<AdminDashboard> with TickerProviderStat
           unselectedLabelColor: AppColors.gray,
           tabs: const [
             Tab(text: 'Active'),
-            Tab(text: 'Pending'),
+            Tab(text: 'Pending Auth'),
+            Tab(text: 'Phone Updates'),
           ],
         ),
       ),
@@ -974,7 +1039,42 @@ class _AdminDashboardState extends State<AdminDashboard> with TickerProviderStat
         children: [
           _buildActiveUsersList(),
           _buildPendingUsersList(),
+          _buildPendingPhoneUsersList(),
         ],
+      ),
+    );
+  }
+
+  Widget _buildUserSearchBar() {
+    return Container(
+      height: 40,
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: TextField(
+        controller: _userSearchController,
+        style: GoogleFonts.outfit(color: AppColors.black, fontSize: 14),
+        cursorColor: AppColors.primary,
+        decoration: InputDecoration(
+          hintText: 'Search by name or phone...',
+          hintStyle: GoogleFonts.outfit(color: AppColors.gray),
+          prefixIcon: const Icon(Icons.search, color: AppColors.gray, size: 20),
+          suffixIcon: _userSearchQuery.isNotEmpty
+              ? IconButton(
+                  icon: const Icon(Icons.clear, color: AppColors.gray, size: 20),
+                  onPressed: () {
+                    _userSearchController.clear();
+                    setState(() => _userSearchQuery = '');
+                  },
+                )
+              : null,
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        ),
+        onChanged: (val) {
+          setState(() => _userSearchQuery = val);
+        },
       ),
     );
   }
@@ -982,20 +1082,25 @@ class _AdminDashboardState extends State<AdminDashboard> with TickerProviderStat
   Widget _buildActiveUsersList() {
     return Consumer<AdminProvider>(
       builder: (context, admin, _) {
+        final filteredList = admin.users.where((u) {
+          final query = _userSearchQuery.toLowerCase();
+          return u.name.toLowerCase().contains(query) || u.phone.contains(query);
+        }).toList();
+
         if (admin.isLoading && admin.users.isEmpty) {
           return const Center(child: CircularProgressIndicator(color: AppColors.primary));
         }
-        if (admin.users.isEmpty) {
-          return _emptyPlaceholder('No active users', Icons.people_outline);
+        if (filteredList.isEmpty) {
+          return _emptyPlaceholder('No active users found', Icons.people_outline);
         }
         return RefreshIndicator(
           onRefresh: () => admin.fetchUsers(),
           color: AppColors.primary,
           child: ListView.builder(
             padding: const EdgeInsets.all(16),
-            itemCount: admin.users.length,
+            itemCount: filteredList.length,
             itemBuilder: (context, index) {
-              final user = admin.users[index];
+              final user = filteredList[index];
               return _buildUserCard(user).animate().fadeIn(delay: (index * 50).ms);
             },
           ),
@@ -1007,20 +1112,25 @@ class _AdminDashboardState extends State<AdminDashboard> with TickerProviderStat
   Widget _buildPendingUsersList() {
     return Consumer<AdminProvider>(
       builder: (context, admin, _) {
+        final filteredList = admin.pendingUsers.where((u) {
+          final query = _userSearchQuery.toLowerCase();
+          return u.name.toLowerCase().contains(query) || u.phone.contains(query);
+        }).toList();
+
         if (admin.isLoading && admin.pendingUsers.isEmpty) {
           return const Center(child: CircularProgressIndicator(color: AppColors.primary));
         }
-        if (admin.pendingUsers.isEmpty) {
-          return _emptyPlaceholder('No pending approvals', Icons.fact_check_outlined);
+        if (filteredList.isEmpty) {
+          return _emptyPlaceholder('No pending approvals found', Icons.fact_check_outlined);
         }
         return RefreshIndicator(
           onRefresh: () => admin.fetchPendingUsers(),
           color: AppColors.primary,
           child: ListView.builder(
             padding: const EdgeInsets.all(16),
-            itemCount: admin.pendingUsers.length,
+            itemCount: filteredList.length,
             itemBuilder: (context, index) {
-              final user = admin.pendingUsers[index];
+              final user = filteredList[index];
               return _buildPendingUserCard(user, admin).animate().fadeIn(delay: (index * 50).ms);
             },
           ),
@@ -1040,6 +1150,18 @@ class _AdminDashboardState extends State<AdminDashboard> with TickerProviderStat
         ],
       ),
     );
+  }
+
+  Future<void> _makePhoneCall(String phoneNumber) async {
+    final Uri launchUri = Uri(
+      scheme: 'tel',
+      path: phoneNumber,
+    );
+    if (await canLaunchUrl(launchUri)) {
+      await launchUrl(launchUri);
+    } else {
+      _showSnack('Could not launch dialer');
+    }
   }
 
   Widget _buildPendingUserCard(UserModel user, AdminProvider admin) {
@@ -1066,7 +1188,20 @@ class _AdminDashboardState extends State<AdminDashboard> with TickerProviderStat
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(user.name, style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16)),
-                    Text(user.phone, style: GoogleFonts.outfit(color: AppColors.gray, fontSize: 14)),
+                    Row(
+                      children: [
+                        Text(user.phone, style: GoogleFonts.outfit(color: AppColors.gray, fontSize: 14)),
+                        const SizedBox(width: 8),
+                        GestureDetector(
+                          onTap: () => _makePhoneCall(user.phone),
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.1), shape: BoxShape.circle),
+                            child: const Icon(Icons.call, size: 14, color: AppColors.primaryDark),
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -1086,8 +1221,126 @@ class _AdminDashboardState extends State<AdminDashboard> with TickerProviderStat
               const Spacer(),
               TextButton.icon(
                 onPressed: () async {
+                  final success = await admin.rejectUser(user.id);
+                  if (success) _showSnack('User rejected successfully');
+                },
+                icon: const Icon(Icons.cancel_outlined, size: 18, color: Colors.red),
+                label: Text('Reject', style: GoogleFonts.outfit(color: Colors.red, fontWeight: FontWeight.bold)),
+              ),
+              TextButton.icon(
+                onPressed: () async {
                   final success = await admin.approveUser(user.id);
                   if (success) _showSnack('User approved successfully');
+                },
+                icon: const Icon(Icons.check_circle_outline, size: 18, color: Colors.green),
+                label: Text('Approve', style: GoogleFonts.outfit(color: Colors.green, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPendingPhoneUsersList() {
+    return Consumer<AdminProvider>(
+      builder: (context, admin, _) {
+        final filteredList = admin.pendingPhoneUsers.where((u) {
+          final query = _userSearchQuery.toLowerCase();
+          return u.name.toLowerCase().contains(query) || 
+                 u.phone.contains(query) || 
+                 (u.pendingPhone ?? '').contains(query);
+        }).toList();
+
+        if (admin.isLoading && admin.pendingPhoneUsers.isEmpty) {
+          return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+        }
+        if (filteredList.isEmpty) {
+          return _emptyPlaceholder('No phone updates found', Icons.phone_android);
+        }
+        return RefreshIndicator(
+          onRefresh: () => admin.fetchPendingPhoneUsers(),
+          color: AppColors.primary,
+          child: ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: filteredList.length,
+            itemBuilder: (context, index) {
+              final user = filteredList[index];
+              return _buildPendingPhoneUserCard(user, admin).animate().fadeIn(delay: (index * 50).ms);
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildPendingPhoneUserCard(UserModel user, AdminProvider admin) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: AppColors.black.withOpacity(0.05), blurRadius: 10)],
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                backgroundColor: AppColors.primary.withOpacity(0.1),
+                child: Text(user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
+                    style: GoogleFonts.outfit(color: AppColors.primaryDark, fontWeight: FontWeight.bold)),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(user.name, style: GoogleFonts.outfit(fontWeight: FontWeight.bold, fontSize: 16)),
+                    Row(
+                      children: [
+                        Text('${user.phone} ➔ ${user.pendingPhone}', style: GoogleFonts.outfit(color: AppColors.primaryDark, fontSize: 13, fontWeight: FontWeight.bold)),
+                        const SizedBox(width: 8),
+                        GestureDetector(
+                          onTap: () => _makePhoneCall(user.pendingPhone ?? user.phone),
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.1), shape: BoxShape.circle),
+                            child: const Icon(Icons.call, size: 14, color: AppColors.primaryDark),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(color: Colors.amber.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                child: Text('UPDATE', style: GoogleFonts.outfit(color: Colors.amber[800], fontSize: 10, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              const Icon(Icons.location_on_outlined, size: 14, color: AppColors.gray),
+              const SizedBox(width: 4),
+              Text(user.district, style: GoogleFonts.outfit(color: AppColors.gray, fontSize: 13)),
+              const Spacer(),
+              TextButton.icon(
+                onPressed: () async {
+                  final success = await admin.rejectPhoneUpdate(user.id);
+                  if (success) _showSnack('Phone update rejected');
+                },
+                icon: const Icon(Icons.cancel_outlined, size: 18, color: Colors.red),
+                label: Text('Reject', style: GoogleFonts.outfit(color: Colors.red, fontWeight: FontWeight.bold)),
+              ),
+              TextButton.icon(
+                onPressed: () async {
+                  final success = await admin.approvePhoneUpdate(user.id);
+                  if (success) _showSnack('Phone update approved');
                 },
                 icon: const Icon(Icons.check_circle_outline, size: 18, color: Colors.green),
                 label: Text('Approve', style: GoogleFonts.outfit(color: Colors.green, fontWeight: FontWeight.bold)),
@@ -1135,6 +1388,15 @@ class _AdminDashboardState extends State<AdminDashboard> with TickerProviderStat
                     Icon(Icons.phone, size: 13, color: AppColors.gray),
                     const SizedBox(width: 4),
                     Text(user.phone, style: GoogleFonts.outfit(fontSize: 13, color: AppColors.gray)),
+                    const SizedBox(width: 8),
+                    GestureDetector(
+                      onTap: () => _makePhoneCall(user.phone),
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.1), shape: BoxShape.circle),
+                        child: const Icon(Icons.call, size: 14, color: AppColors.primaryDark),
+                      ),
+                    ),
                   ],
                 ),
                 Row(

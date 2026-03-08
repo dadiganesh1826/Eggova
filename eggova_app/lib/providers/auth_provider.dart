@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../config/constants.dart';
 import '../models/user.dart';
 import '../services/api_service.dart';
@@ -46,6 +47,11 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
+      // Force account picker every time by signing out of the local cache first
+      try {
+        await _googleSignIn.signOut();
+      } catch (_) {}
+      
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
       if (googleUser == null) {
         _isLoading = false;
@@ -54,10 +60,17 @@ class AuthProvider extends ChangeNotifier {
       }
 
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
-      _googleIdToken = googleAuth.idToken;
+      
+      final AuthCredential credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+      
+      final UserCredential userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
+      _googleIdToken = await userCredential.user?.getIdToken();
 
       if (_googleIdToken == null) {
-        _error = 'Failed to get ID token from Google';
+        _error = 'Failed to get Firebase ID token';
         _isLoading = false;
         notifyListeners();
         return false;
@@ -369,8 +382,19 @@ class AuthProvider extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(AppConstants.tokenKey);
     await prefs.remove(AppConstants.userKey);
+    
+    // Disconnect from Google to force account selection next time
+    try {
+      await _googleSignIn.disconnect();
+    } catch (_) {}
+    
+    try {
+      await FirebaseAuth.instance.signOut();
+    } catch (_) {}
+
     _user = null;
     _token = null;
+    _googleIdToken = null;
     notifyListeners();
   }
 
