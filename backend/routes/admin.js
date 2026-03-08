@@ -76,6 +76,44 @@ router.put('/users/:id/approve', auth, adminOnly, async (req, res) => {
     }
 });
 
+// Reject a pending user
+router.put('/users/:id/reject', auth, adminOnly, async (req, res) => {
+    try {
+        const user = await User.findByPk(req.params.id);
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+
+        user.status = 'rejected';
+        await user.save();
+
+        // Notify user
+        try {
+            await Notification.create({
+                userId: user.id,
+                title: 'Account Registration Rejected',
+                message: 'Your registration was rejected. Please contact support.',
+                type: 'account_rejected',
+            });
+
+            if (user.fcmToken) {
+                await sendPush(
+                    user.fcmToken,
+                    'Account Registration Rejected',
+                    'Your registration was rejected. Please contact support.'
+                );
+            }
+        } catch (notifierErr) {
+            console.error('Failed to notify user of rejection:', notifierErr);
+        }
+
+        res.json({ success: true, message: 'User rejected successfully', data: user.toSafeJSON() });
+    } catch (error) {
+        console.error('Reject user error:', error);
+        res.status(500).json({ success: false, message: 'Failed to reject user' });
+    }
+});
+
 // Get pending payments
 router.get('/pending-payments', auth, adminOnly, async (req, res) => {
     try {
