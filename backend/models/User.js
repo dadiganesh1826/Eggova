@@ -58,6 +58,11 @@ const User = sequelize.define('User', {
         type: DataTypes.ENUM('pending', 'approved', 'rejected'),
         defaultValue: 'approved', // Legacy users default to approved
     },
+    pendingPhone: {
+        type: DataTypes.STRING(15),
+        allowNull: true,
+        field: 'pending_phone',
+    },
 }, {
     tableName: 'users',
     underscored: true,

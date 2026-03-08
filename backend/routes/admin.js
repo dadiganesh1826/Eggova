@@ -84,33 +84,77 @@ router.put('/users/:id/reject', auth, adminOnly, async (req, res) => {
             return res.status(404).json({ success: false, message: 'User not found' });
         }
 
-        user.status = 'rejected';
-        await user.save();
+        const fcmToken = user.fcmToken;
+
+        // Hard delete user from database so they can re-register
+        await user.destroy();
 
         // Notify user
         try {
-            await Notification.create({
-                userId: user.id,
-                title: 'Account Registration Rejected',
-                message: 'Your registration was rejected. Please contact support.',
-                type: 'account_rejected',
-            });
-
-            if (user.fcmToken) {
+            if (fcmToken) {
                 await sendPush(
-                    user.fcmToken,
+                    fcmToken,
                     'Account Registration Rejected',
-                    'Your registration was rejected. Please contact support.'
+                    'Your registration was rejected. Please contact support or try registering again with correct details.'
                 );
             }
         } catch (notifierErr) {
             console.error('Failed to notify user of rejection:', notifierErr);
         }
 
-        res.json({ success: true, message: 'User rejected successfully', data: user.toSafeJSON() });
+        res.json({ success: true, message: 'User rejected and deleted successfully' });
     } catch (error) {
         console.error('Reject user error:', error);
         res.status(500).json({ success: false, message: 'Failed to reject user' });
+    }
+});
+
+// Get pending phone updates
+router.get('/users/pending-phone', auth, adminOnly, async (req, res) => {
+    try {
+        const users = await User.findAll({
+            where: { pendingPhone: { [Op.not]: null } },
+            attributes: { exclude: ['passwordHash', 'password_hash'] },
+            order: [['updated_at', 'DESC']],
+        });
+        res.json({ success: true, data: users });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Failed to fetch pending phone updates' });
+    }
+});
+
+// Approve phone update
+router.put('/users/:id/approve-phone', auth, adminOnly, async (req, res) => {
+    try {
+        const user = await User.findByPk(req.params.id);
+        if (!user || !user.pendingPhone) return res.status(404).json({ success: false, message: 'No phone request found' });
+
+        user.phone = user.pendingPhone;
+        user.pendingPhone = null;
+        await user.save();
+
+        if (user.fcmToken) await sendPush(user.fcmToken, 'Phone Number Updated ✅', 'Your phone number has been successfully updated by the admin');
+
+        res.json({ success: true, message: 'Phone number approved' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Failed to approve phone update' });
+    }
+});
+
+// Reject phone update
+router.put('/users/:id/reject-phone', auth, adminOnly, async (req, res) => {
+    try {
+        const user = await User.findByPk(req.params.id);
+        if (!user || !user.pendingPhone) return res.status(404).json({ success: false, message: 'No phone request found' });
+
+        user.pendingPhone = null;
+        await user.save();
+
+        if (user.fcmToken) await sendPush(user.fcmToken, 'Phone Update Rejected ❌', 'Your request to update the phone number was rejected by the admin');
+
+        res.json({ success: true, message: 'Phone update rejected' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Failed to reject phone update' });
     }
 });
 
