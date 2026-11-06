@@ -20,7 +20,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # ── Node.js Backend ────────────────────────────────────────────────────────
+  # ── Java Spring Boot Backend ───────────────────────────────────────────────
   backend:
     build:
       context: ./backend
@@ -30,15 +30,15 @@ services:
     env_file:
       - ./backend/.env.production
     environment:
-      NODE_ENV: production
-      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
+      SPRING_PROFILES_ACTIVE: production
+      DATABASE_URL: jdbc:postgresql://postgres:5432/${DB_NAME}
     depends_on:
       postgres:
         condition: service_healthy
     networks:
       - eggova_net
     expose:
-      - "3000"
+      - "8080"
     volumes:
       # Mount firebase service account (never commit this file!)
       - ./backend/firebase-service-account.json:/app/firebase-service-account.json:ro

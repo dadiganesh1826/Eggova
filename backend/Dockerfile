@@ -1,45 +1,37 @@
-# ── Stage 1: Install dependencies ──────────────────────────────────────────
-FROM node:20-alpine AS deps
+# ── Stage 1: Build ──────────────────────────────────────────────────────────
+FROM eclipse-temurin:21-jdk-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files
-COPY package.json package-lock.json ./
+# Install maven
+RUN apk add --no-cache maven
 
-# Install production dependencies only
-RUN npm ci --omit=dev
+# Cache dependencies first
+COPY pom.xml .
+RUN mvn dependency:go-offline -q
 
-# ── Stage 2: Production image ───────────────────────────────────────────────
-FROM node:20-alpine AS runner
+# Build the application
+COPY src ./src
+RUN mvn clean package -DskipTests -q
+
+# ── Stage 2: Runtime ─────────────────────────────────────────────────────────
+FROM eclipse-temurin:21-jre-alpine AS runner
 
 WORKDIR /app
 
-# Install dumb-init for proper signal handling (graceful shutdown)
 RUN apk add --no-cache dumb-init
 
-# Create non-root user for security
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S eggova -u 1001
+# Non-root user for security
+RUN addgroup -g 1001 -S eggova && adduser -S eggova -u 1001 -G eggova
 
-# Copy production node_modules from deps stage
-COPY --from=deps /app/node_modules ./node_modules
+COPY --from=builder --chown=eggova:eggova /app/target/eggova-backend-*.jar app.jar
 
-# Copy application source
-COPY --chown=eggova:nodejs . .
-
-# Remove dev/local-only files
-RUN rm -f eggova.sqlite .env startup.log
-
-# Switch to non-root user
 USER eggova
 
-# Expose app port
-EXPOSE 3000
+EXPOSE 8080
 
-# Health check — Docker will restart container if backend stops responding
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-  CMD wget -qO- http://localhost:3000/api/health || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD wget -qO- http://localhost:8080/api/health || exit 1
 
-# Start with dumb-init so Node handles SIGTERM properly
 ENTRYPOINT ["dumb-init", "--"]
-CMD ["node", "server.js"]
+CMD ["java", "-jar", "app.jar"]

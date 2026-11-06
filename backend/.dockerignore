@@ -1,9 +1,11 @@
-node_modules
+target/
+.mvn/wrapper/maven-wrapper.jar
 .env
 .env.production
-eggova.sqlite
-startup.log
 *.log
 .git
 .gitignore
+.idea/
+*.iml
+.vscode/
 README.md
