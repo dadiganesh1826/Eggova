@@ -1,14 +1,21 @@
 import 'package:flutter/foundation.dart' show kDebugMode;
 
 class AppConstants {
-  // API Base URL — auto-switches between local (debug) and production (release)
+  // Your PC's Local Wi-Fi IPv4 Address (from ipconfig)
+  // When testing on a real Android phone over Wi-Fi, the phone connects to this IP.
+  static const String localIp = '192.168.1.4';
+  static const String localPort = '3000';
+
+  // API Base URL — auto-switches or accepts --dart-define=API_URL=...
   static String get apiBaseUrl {
+    const customUrl = String.fromEnvironment('API_URL');
+    if (customUrl.isNotEmpty) return customUrl;
+
     const env = String.fromEnvironment('ENV');
     if (env == 'prod') return 'http://77.42.34.63/api'; // Forced production server
     
-    return kDebugMode
-        ? 'http://localhost:3000/api'   // Debug: works via `adb reverse tcp:3000 tcp:3000`
-        : 'http://77.42.34.63/api';     // Production server (fallback if no ENV passed)
+    // Always connect to local PC Wi-Fi IP for local testing (both debug and release APKs)
+    return 'http://$localIp:$localPort/api';
   }
 
   // App Info

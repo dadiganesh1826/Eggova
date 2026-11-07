@@ -226,6 +226,62 @@ public class AuthService {
                 .body(ApiResponse.ok("Details submitted successfully. Waiting for Admin approval.", data));
     }
 
+    // ─────────────────────────── Direct User Register (phone + password) ─────
+
+    @Transactional
+    public ResponseEntity<?> register(Map<String, String> body) {
+        String phone = body.get("phone");
+        String password = body.get("password");
+        String name = body.get("name");
+        String district = body.get("district");
+
+        if (phone == null || phone.trim().length() < 10) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Valid 10-digit mobile number is required"));
+        }
+        if (password == null || password.trim().length() < 6) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Password must be at least 6 characters"));
+        }
+        if (name == null || name.trim().isEmpty()) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Full name is required"));
+        }
+        if (district == null || district.trim().isEmpty()) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("District is required"));
+        }
+
+        phone = phone.trim();
+        name = name.trim();
+        district = district.trim();
+
+        if (userRepository.findByPhone(phone).isPresent()) {
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(ApiResponse.error("An account with this mobile number already exists"));
+        }
+
+        String state = DISTRICT_STATE_MAP.getOrDefault(district, "Andhra Pradesh");
+
+        User newUser = User.builder()
+                .name(name)
+                .phone(phone)
+                .passwordHash(passwordEncoder.encode(password))
+                .district(district)
+                .state(state)
+                .role(User.Role.user)
+                .status(User.Status.approved)
+                .build();
+
+        User savedUser = userRepository.save(newUser);
+        log.info("[AuthService] New customer registered directly: phone={}, name={}", phone, name);
+
+        String token = jwtTokenProvider.generateToken(savedUser.getId());
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("user", safeUser(savedUser));
+        data.put("token", token);
+        data.put("isNewUser", true);
+
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(ApiResponse.ok("Registration successful", data));
+    }
+
     // ─────────────────────────── User Login (phone) ───────────────────────────
 
     public ResponseEntity<?> userLogin(String phone, String password) {
@@ -445,13 +501,13 @@ public class AuthService {
 
     public Map<String, Object> safeUser(User u) {
         Map<String, Object> map = new LinkedHashMap<>();
-        map.put("id", u.getId());
-        map.put("name", u.getName());
-        map.put("email", u.getEmail());
-        map.put("phone", u.getPhone());
+        map.put("id", u.getId() != null ? u.getId().toString() : "");
+        map.put("name", u.getName() != null ? u.getName() : "");
+        map.put("email", u.getEmail() != null ? u.getEmail() : "");
+        map.put("phone", u.getPhone() != null ? u.getPhone() : "");
         map.put("address", u.getAddress());
-        map.put("district", u.getDistrict());
-        map.put("state", u.getState());
+        map.put("district", u.getDistrict() != null ? u.getDistrict() : "");
+        map.put("state", u.getState() != null ? u.getState() : "Andhra Pradesh");
         map.put("pincode", u.getPincode());
         map.put("role", u.getRole() != null ? u.getRole().name() : "user");
         map.put("fcmToken", u.getFcmToken());

@@ -11,13 +11,20 @@ class ApiService {
   ApiService._internal() {
     _dio = Dio(BaseOptions(
       baseUrl: AppConstants.apiBaseUrl,
-      connectTimeout: const Duration(seconds: 10),
-      receiveTimeout: const Duration(seconds: 10),
+      connectTimeout: const Duration(seconds: 15),
+      receiveTimeout: const Duration(seconds: 15),
       headers: {'Content-Type': 'application/json'},
+      followRedirects: true,
+      maxRedirects: 5,
     ));
 
     _dio.interceptors.add(InterceptorsWrapper(
       onRequest: (options, handler) async {
+        // Ensure '/api' prefix is retained when resolving absolute paths
+        if (options.baseUrl.endsWith('/api') && options.path.startsWith('/')) {
+          options.baseUrl = options.baseUrl.substring(0, options.baseUrl.length - 4);
+          options.path = '/api${options.path}';
+        }
         final prefs = await SharedPreferences.getInstance();
         final token = prefs.getString(AppConstants.tokenKey);
         if (token != null) {

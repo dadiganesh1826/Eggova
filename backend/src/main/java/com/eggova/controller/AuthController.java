@@ -34,6 +34,12 @@ public class AuthController {
         return authService.checkPhone(body.get("phone"));
     }
 
+    @Operation(summary = "User Register", description = "Register a new customer account with phone, password, name, and district")
+    @PostMapping("/register")
+    public ResponseEntity<?> register(@RequestBody Map<String, String> body) {
+        return authService.register(body);
+    }
+
     @Operation(summary = "Register Details", description = "Complete profile registration after Google Sign-In with phone and district")
     @PostMapping("/register-details")
     public ResponseEntity<?> registerDetails(@RequestBody RegisterDetailsRequest req) {

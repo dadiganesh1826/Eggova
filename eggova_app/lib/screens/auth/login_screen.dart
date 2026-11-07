@@ -4,11 +4,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../config/theme.dart';
-import '../../config/district_data.dart';
 import '../../providers/auth_provider.dart';
-
-// The stages of the user login flow
-enum _AuthStage { initial }
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -20,15 +16,21 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
   bool _isAdminMode = false;
-  _AuthStage _stage = _AuthStage.initial;
 
-  // ── Admin mode ───────────────────────────────────────────────────────────
+  // ── Customer Mode (Phone + Password) ──────────────────────────────────────
+  final _userPhoneController = TextEditingController();
+  final _userPasswordController = TextEditingController();
+  bool _userObscure = true;
+
+  // ── Admin Mode (Email + Password) ─────────────────────────────────────────
   final _emailController = TextEditingController();
   final _adminPasswordController = TextEditingController();
   bool _adminObscure = true;
 
   @override
   void dispose() {
+    _userPhoneController.dispose();
+    _userPasswordController.dispose();
     _emailController.dispose();
     _adminPasswordController.dispose();
     super.dispose();
@@ -54,6 +56,46 @@ class _LoginScreenState extends State<LoginScreen> {
       Navigator.pushReplacementNamed(context, '/admin-dashboard');
     } else {
       Navigator.pushReplacementNamed(context, '/dashboard');
+    }
+  }
+
+  // ────────────────────────────────────────────────────
+  // Customer Phone + Password Login
+  // ────────────────────────────────────────────────────
+  Future<void> _handleUserPhoneLogin() async {
+    if (_isLoading) return;
+    final phone = _userPhoneController.text.trim();
+    final password = _userPasswordController.text;
+
+    if (phone.length < 10) {
+      _showSnack('Please enter a valid 10-digit mobile number');
+      return;
+    }
+    if (password.isEmpty) {
+      _showSnack('Please enter your password');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      final auth = Provider.of<AuthProvider>(context, listen: false);
+      final success = await auth.loginWithPassword(phone, password);
+
+      if (!mounted) return;
+
+      if (success) {
+        if (auth.requiresDetails) {
+          Navigator.pushNamed(context, '/complete-profile');
+        } else if (auth.isPendingApproval) {
+          Navigator.pushNamed(context, '/pending-approval');
+        } else {
+          _navigate(auth);
+        }
+      } else {
+        _showSnack(auth.error ?? 'Login failed. Please check your credentials.');
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -123,7 +165,7 @@ class _LoginScreenState extends State<LoginScreen> {
       backgroundColor: AppColors.offWhite,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 28),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -132,23 +174,35 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: Column(
                   children: [
                     Container(
-                      width: 80, height: 80,
+                      width: 76,
+                      height: 76,
                       decoration: BoxDecoration(
                         gradient: AppColors.primaryGradient,
                         borderRadius: BorderRadius.circular(24),
-                        boxShadow: [BoxShadow(color: AppColors.primary.withValues(alpha: 0.35), blurRadius: 20, offset: const Offset(0, 8))],
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.primary.withValues(alpha: 0.35),
+                            blurRadius: 20,
+                            offset: const Offset(0, 8),
+                          )
+                        ],
                       ),
-                      child: const Icon(Icons.egg_rounded, color: AppColors.black, size: 44),
+                      child: const Icon(Icons.egg_rounded, color: AppColors.black, size: 42),
                     ).animate().fadeIn(duration: 600.ms).scale(begin: const Offset(0.8, 0.8)),
-                    const SizedBox(height: 20),
-                    Text('Eggova', style: GoogleFonts.outfit(fontSize: 32, fontWeight: FontWeight.w900, color: AppColors.black))
-                        .animate().fadeIn(delay: 200.ms),
-                    Text('Fresh Eggs, Fair Prices', style: GoogleFonts.outfit(fontSize: 14, color: AppColors.gray))
-                        .animate().fadeIn(delay: 300.ms),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Eggova',
+                      style: GoogleFonts.outfit(fontSize: 32, fontWeight: FontWeight.w900, color: AppColors.black),
+                    ).animate().fadeIn(delay: 200.ms),
+                    Text(
+                      'Fresh Eggs, Fair Prices',
+                      style: GoogleFonts.outfit(fontSize: 14, color: AppColors.gray),
+                    ).animate().fadeIn(delay: 300.ms),
                   ],
                 ),
               ),
-              const SizedBox(height: 40),
+
+              const SizedBox(height: 32),
 
               // ── Card ──────────────────────────────────────────────────
               Container(
@@ -156,7 +210,13 @@ class _LoginScreenState extends State<LoginScreen> {
                 decoration: BoxDecoration(
                   color: AppColors.white,
                   borderRadius: BorderRadius.circular(24),
-                  boxShadow: [BoxShadow(color: AppColors.black.withValues(alpha: 0.07), blurRadius: 24, offset: const Offset(0, 8))],
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.black.withValues(alpha: 0.07),
+                      blurRadius: 24,
+                      offset: const Offset(0, 8),
+                    )
+                  ],
                 ),
                 child: _isAdminMode ? _buildAdminForm() : _buildUserFlow(),
               ).animate().fadeIn(delay: 400.ms).slideY(begin: 0.08, end: 0),
@@ -170,8 +230,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     _isAdminMode = !_isAdminMode;
                   }),
                   child: Text(
-                    _isAdminMode ? 'Login as Customer' : 'Admin Login',
-                    style: GoogleFonts.outfit(fontSize: 13, color: AppColors.gray),
+                    _isAdminMode ? '← Back to Customer Login' : 'Admin Login',
+                    style: GoogleFonts.outfit(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.gray),
                   ),
                 ),
               ),
@@ -183,55 +243,141 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   // ────────────────────────────
-  // User flow (Google Only)
+  // Customer Flow (Phone + Password & Google)
   // ────────────────────────────
   Widget _buildUserFlow() {
     return Column(
-      key: const ValueKey('google_auth'),
+      key: const ValueKey('customer_auth'),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Welcome!', style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.black)),
+        Text(
+          'Welcome Back! 👋',
+          style: GoogleFonts.outfit(fontSize: 22, fontWeight: FontWeight.w800, color: AppColors.black),
+        ),
         const SizedBox(height: 4),
-        Text('Sign in to continue to Eggova', style: GoogleFonts.outfit(fontSize: 14, color: AppColors.gray)),
-        const SizedBox(height: 32),
-        
-        // Google Button
+        Text(
+          'Sign in to your customer account',
+          style: GoogleFonts.outfit(fontSize: 14, color: AppColors.gray),
+        ),
+        const SizedBox(height: 24),
+
+        // Mobile Number
+        TextFormField(
+          controller: _userPhoneController,
+          keyboardType: TextInputType.phone,
+          inputFormatters: [
+            FilteringTextInputFormatter.digitsOnly,
+            LengthLimitingTextInputFormatter(10),
+          ],
+          style: GoogleFonts.outfit(fontSize: 15, color: AppColors.darkGray),
+          decoration: InputDecoration(
+            labelText: 'Mobile Number',
+            labelStyle: GoogleFonts.outfit(color: AppColors.gray),
+            prefixIcon: const Icon(Icons.phone_android_rounded, color: AppColors.gray),
+            prefixText: '+91 ',
+            prefixStyle: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.darkGray),
+            filled: true,
+            fillColor: AppColors.offWhite,
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        // Password
+        _passwordField(
+          'Password',
+          _userPasswordController,
+          _userObscure,
+          () => setState(() => _userObscure = !_userObscure),
+        ),
+        const SizedBox(height: 20),
+
+        // Sign In Button
+        _primaryButton('Sign In', _handleUserPhoneLogin),
+        const SizedBox(height: 16),
+
+        // Don't have an account? Sign Up
+        Center(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                "Don't have an account? ",
+                style: GoogleFonts.outfit(fontSize: 14, color: AppColors.gray),
+              ),
+              GestureDetector(
+                onTap: () => Navigator.pushNamed(context, '/register'),
+                child: Text(
+                  'Sign Up',
+                  style: GoogleFonts.outfit(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.black,
+                    decoration: TextDecoration.underline,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 24),
+
+        // Divider
+        Row(
+          children: [
+            Expanded(child: Divider(color: AppColors.gray.withValues(alpha: 0.25))),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Text(
+                'OR',
+                style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.gray),
+              ),
+            ),
+            Expanded(child: Divider(color: AppColors.gray.withValues(alpha: 0.25))),
+          ],
+        ),
+
+        const SizedBox(height: 20),
+
+        // Google Sign-In Button
         SizedBox(
           width: double.infinity,
-          height: 54,
+          height: 52,
           child: OutlinedButton(
             onPressed: _isLoading ? null : _handleGoogleSignIn,
             style: OutlinedButton.styleFrom(
-              side: BorderSide(color: AppColors.gray.withOpacity(0.2)),
+              side: BorderSide(color: AppColors.gray.withValues(alpha: 0.25)),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              padding: const EdgeInsets.symmetric(horizontal: 24),
+              padding: const EdgeInsets.symmetric(horizontal: 20),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                if (_isLoading)
-                  const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary))
-                else ...[
-                   Image.network(
-                    'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_\"G\"_logo.svg/1024px-Google_\"G\"_logo.svg.png',
-                    height: 24,
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    'Sign in with Google',
-                    style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w600, color: AppColors.darkGray),
-                  ),
-                ],
+                Image.network(
+                  'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_\"G\"_logo.svg/1024px-Google_\"G\"_logo.svg.png',
+                  height: 22,
+                  errorBuilder: (context, error, stackTrace) =>
+                      const Icon(Icons.g_mobiledata, size: 24, color: AppColors.primary),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Sign in with Google',
+                  style: GoogleFonts.outfit(fontSize: 15, fontWeight: FontWeight.w600, color: AppColors.darkGray),
+                ),
               ],
             ),
           ),
         ),
-        
-        const SizedBox(height: 20),
-        Text(
-          'By continuing, you agree to our Terms of Service.',
-          textAlign: TextAlign.center,
-          style: GoogleFonts.outfit(fontSize: 12, color: AppColors.gray),
+
+        const SizedBox(height: 16),
+        Center(
+          child: Text(
+            'By continuing, you agree to our Terms of Service.',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.outfit(fontSize: 11, color: AppColors.gray),
+          ),
         ),
       ],
     );

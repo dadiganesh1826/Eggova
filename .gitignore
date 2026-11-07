@@ -1,0 +1,8 @@
+# Tools & Binaries
+tools/
+*.exe
+
+# OS generated
+.DS_Store
+Thumbs.db
+
